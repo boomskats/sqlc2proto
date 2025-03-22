@@ -16,15 +16,16 @@ import (
 
 // Config holds the configuration for code generation
 type Config struct {
-	SQLCDir          string            `yaml:"sqlcDir"`
-	ProtoOutputDir   string            `yaml:"protoDir"`
-	ProtoPackageName string            `yaml:"protoPackage"`
-	GoPackagePath    string            `yaml:"goPackage"`
-	GenerateMappers  bool              `yaml:"withMappers"`
-	TypeMappings     map[string]string `yaml:"typeMappings"`
-	ModuleName       string            `yaml:"moduleName"`
-	ProtoGoImport    string            `yaml:"protoGoImport"`
-	FieldStyle       string            `yaml:"fieldStyle"` // "json", "snake_case", or "original"
+	SQLCDir              string            `yaml:"sqlcDir"`
+	ProtoOutputDir       string            `yaml:"protoDir"`
+	ProtoPackageName     string            `yaml:"protoPackage"`
+	GoPackagePath        string            `yaml:"goPackage"`
+	GenerateMappers      bool              `yaml:"withMappers"`
+	TypeMappings         map[string]string `yaml:"typeMappings"`
+	NullableTypeMappings map[string]string `yaml:"nullableTypeMappings"`
+	ModuleName           string            `yaml:"moduleName"`
+	ProtoGoImport        string            `yaml:"protoGoImport"`
+	FieldStyle           string            `yaml:"fieldStyle"` // "json", "snake_case", or "original"
 }
 
 // SaveConfig saves the configuration to a YAML file

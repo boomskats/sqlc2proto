@@ -75,6 +75,11 @@ func AddCustomTypeMappings(mappings map[string]string) {
 	maps.Copy(TypeMapping, mappings)
 }
 
+// AddCustomNullableTypeMappings adds custom nullable type mappings
+func AddCustomNullableTypeMappings(mappings map[string]string) {
+	maps.Copy(NullableTypeMapping, mappings)
+}
+
 // ProcessSQLCDirectory processes all Go files in the sqlc output directory
 func ProcessSQLCDirectory(dir string, fieldStyle string) ([]ProtoMessage, error) {
 	var messages []ProtoMessage

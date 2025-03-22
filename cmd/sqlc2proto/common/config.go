@@ -49,6 +49,9 @@ func LoadConfigFile(path string, cfg *generator.Config, verbose bool) error {
 	if len(config.TypeMappings) > 0 {
 		parser.AddCustomTypeMappings(config.TypeMappings)
 	}
+	if len(config.NullableTypeMappings) > 0 {
+		parser.AddCustomNullableTypeMappings(config.NullableTypeMappings)
+	}
 	if config.ModuleName != "" {
 		cfg.ModuleName = config.ModuleName
 	}
@@ -193,6 +196,24 @@ typeMappings:
 		}
 	} else {
 		content += `#  "CustomType": "string"
+#  "time.Time": "string"  # Override default
+#  "uuid.UUID": "bytes"   # Use bytes instead of string for UUIDs
+`
+	}
+
+	content += `
+# nullableTypeMappings is a map of SQLC nullable type names to protobuf type names
+nullableTypeMappings:
+`
+	if len(config.NullableTypeMappings) > 0 {
+		for k, v := range config.NullableTypeMappings {
+			content += `  "` + k + `": "` + v + `"
+`
+		}
+	} else {
+		content += `#  "sql.NullString": "google.protobuf.StringValue"  # Use wrapper types
+#  "sql.NullInt64": "int64"
+#  "uuid.NullUUID": "string"
 `
 	}
 
@@ -203,13 +224,15 @@ typeMappings:
 // DefaultConfig returns a default configuration
 func DefaultConfig() generator.Config {
 	return generator.Config{
-		SQLCDir:          "./db/sqlc",
-		ProtoOutputDir:   "./proto/gen",
-		ProtoPackageName: "api.v1",
-		GoPackagePath:    "",
-		GenerateMappers:  false,
-		ModuleName:       "",
-		ProtoGoImport:    "",
-		FieldStyle:       "json", // Default to using JSON tags
+		SQLCDir:              "./db/sqlc",
+		ProtoOutputDir:       "./proto/gen",
+		ProtoPackageName:     "api.v1",
+		GoPackagePath:        "",
+		GenerateMappers:      false,
+		ModuleName:           "",
+		ProtoGoImport:        "",
+		FieldStyle:           "json", // Default to using JSON tags
+		TypeMappings:         map[string]string{},
+		NullableTypeMappings: map[string]string{},
 	}
 }
