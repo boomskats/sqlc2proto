@@ -5,15 +5,15 @@ import (
     "database/sql"
     {{ if .HasTimestamp }}
     "time"
-    
     "google.golang.org/protobuf/types/known/timestamppb"
+    "github.com/jackc/pgx/v5/pgtype"
     {{ end }}
 
     "{{ .ProtoImport }}"
     db "github.com/yourusername/yourproject/db/sqlc" // Replace with your actual SQLC path
 )
+{{ range .Messages }}{{ if not (eq .Name "Queries") }}
 
-{{ range .Messages }}
 // ToProto converts a DB {{ .SQLCStruct }} to a Proto {{ .Name }}
 func {{ .SQLCStruct }}ToProto(in *db.{{ .SQLCStruct }}) *{{ .ProtoPackage }}.{{ .Name }} {
     if in == nil {
@@ -21,9 +21,9 @@ func {{ .SQLCStruct }}ToProto(in *db.{{ .SQLCStruct }}) *{{ .ProtoPackage }}.{{ 
     }
     
     return &{{ .ProtoPackage }}.{{ .Name }}{
-        {{ range .Fields }}
-        {{ camelCase .Name }}: {{ .ConversionCode }},
-        {{ end }}
+        {{- range .Fields }}
+        {{ pascalCase .Name }}: {{ .ConversionCode }},
+        {{- end }}
     }
 }
 
@@ -34,9 +34,9 @@ func {{ .SQLCStruct }}FromProto(in *{{ .ProtoPackage }}.{{ .Name }}) *db.{{ .SQL
     }
     
     return &db.{{ .SQLCStruct }}{
-        {{ range .Fields }}
+        {{- range .Fields }}
         {{ .SQLCName }}: {{ .ReverseConversionCode }},
-        {{ end }}
+        {{- end }}
     }
 }
-{{ end }}
+{{ end }}{{ end }}
