@@ -17,6 +17,7 @@ import (
 var TypeMapping = map[string]string{
 	"string":             "string",
 	"int":                "int32",
+	"int16":              "int32", // Added for smallint/int2
 	"int32":              "int32",
 	"int64":              "int64",
 	"float32":            "float",
@@ -27,16 +28,22 @@ var TypeMapping = map[string]string{
 	"pgtype.Date":        "google.protobuf.Timestamp",
 	"pgtype.Timestamptz": "google.protobuf.Timestamp",
 	"pgtype.Text":        "string",
+	"pgtype.Numeric":     "string", // Added for numeric/decimal
+	"uuid.UUID":          "string", // Added for UUID
+	"json.RawMessage":    "string", // Added for JSON
+	"pgtype.Interval":    "int64",  // Added for interval
 }
 
 // NullableTypeMapping maps sqlc nullable types to Protobuf types
 var NullableTypeMapping = map[string]string{
 	"sql.NullString":  "string",
+	"sql.NullInt16":   "int32", // Added for nullable smallint
 	"sql.NullInt32":   "int32",
 	"sql.NullInt64":   "int64",
 	"sql.NullFloat64": "double",
 	"sql.NullBool":    "bool",
 	"sql.NullTime":    "google.protobuf.Timestamp",
+	"uuid.NullUUID":   "string", // Added for nullable UUID
 }
 
 // ProtoMessage represents a Protobuf message
@@ -189,8 +196,19 @@ func processSQLCFile(filePath string, fieldStyle string) ([]ProtoMessage, error)
 
 				// Check if it's a slice (repeated)
 				if strings.HasPrefix(typeStr, "[]") {
-					isRepeated = true
 					typeStr = strings.TrimPrefix(typeStr, "[]")
+
+					// Special case for []byte which maps to bytes in protobuf (not repeated)
+					if typeStr == "byte" {
+						typeStr = "[]byte" // Restore the full type for TypeMapping lookup
+					} else if typeStr == "[]byte" {
+						// Special case for [][]byte which also maps to bytes in protobuf (not repeated)
+						// This is for ByteaArray in PostgreSQL
+						typeStr = "[]byte" // The inner []byte maps to bytes
+						isRepeated = true
+					} else {
+						isRepeated = true
+					}
 				}
 
 				// Check if it's a nullable type
@@ -289,6 +307,14 @@ func extractTag(tagStr string, key string) string {
 
 // camelToSnake converts a camelCase string to snake_case
 func camelToSnake(s string) string {
+	// Special cases for UUID and ULID which should not be treated as having ID suffix
+	if s == "UUID" {
+		return "uuid"
+	}
+	if s == "ULID" {
+		return "ulid"
+	}
+
 	// Special case for ID at the end of the string
 	s = strings.Replace(s, "ID", "Id", -1)
 
@@ -301,6 +327,8 @@ func generateNullableConversionCode(sqlType string, field ProtoField) string {
 	switch sqlType {
 	case "sql.NullString":
 		return fmt.Sprintf("nullStringToString(in.%s)", field.SQLCName)
+	case "sql.NullInt16":
+		return fmt.Sprintf("nullInt16ToInt32(in.%s)", field.SQLCName)
 	case "sql.NullInt32":
 		return fmt.Sprintf("nullInt32ToInt32(in.%s)", field.SQLCName)
 	case "sql.NullInt64":
@@ -311,6 +339,8 @@ func generateNullableConversionCode(sqlType string, field ProtoField) string {
 		return fmt.Sprintf("nullBoolToBool(in.%s)", field.SQLCName)
 	case "sql.NullTime":
 		return fmt.Sprintf("nullTimeToTimestamp(in.%s)", field.SQLCName)
+	case "uuid.NullUUID":
+		return fmt.Sprintf("nullUUIDToString(in.%s)", field.SQLCName)
 	default:
 		return fmt.Sprintf("in.%s", field.SQLCName)
 	}
@@ -324,6 +354,8 @@ func generateReverseNullableConversionCode(sqlType string, field ProtoField) str
 	switch sqlType {
 	case "sql.NullString":
 		return fmt.Sprintf("stringToNullString(in.%s)", pascalName)
+	case "sql.NullInt16":
+		return fmt.Sprintf("int32ToNullInt16(in.%s)", pascalName)
 	case "sql.NullInt32":
 		return fmt.Sprintf("int32ToNullInt32(in.%s)", pascalName)
 	case "sql.NullInt64":
@@ -334,6 +366,8 @@ func generateReverseNullableConversionCode(sqlType string, field ProtoField) str
 		return fmt.Sprintf("boolToNullBool(in.%s)", pascalName)
 	case "sql.NullTime":
 		return fmt.Sprintf("timestampToNullTime(in.%s)", pascalName)
+	case "uuid.NullUUID":
+		return fmt.Sprintf("stringToNullUUID(in.%s)", pascalName)
 	default:
 		return fmt.Sprintf("in.%s", pascalName)
 	}
@@ -350,6 +384,16 @@ func generateStandardConversionCode(sqlType string, field ProtoField) string {
 		return fmt.Sprintf("timestamptzToTimestamp(in.%s)", field.SQLCName)
 	case "pgtype.Text":
 		return fmt.Sprintf("pgtypeTextToString(in.%s)", field.SQLCName)
+	case "pgtype.Numeric":
+		return fmt.Sprintf("numericToString(in.%s)", field.SQLCName)
+	case "uuid.UUID":
+		return fmt.Sprintf("uuidToString(in.%s)", field.SQLCName)
+	case "json.RawMessage":
+		return fmt.Sprintf("jsonToString(in.%s)", field.SQLCName)
+	case "pgtype.Interval":
+		return fmt.Sprintf("intervalToInt64(in.%s)", field.SQLCName)
+	case "int16":
+		return fmt.Sprintf("int32(in.%s)", field.SQLCName)
 	default:
 		return fmt.Sprintf("in.%s", field.SQLCName)
 	}
@@ -369,6 +413,16 @@ func generateReverseStandardConversionCode(sqlType string, field ProtoField) str
 		return fmt.Sprintf("timestampToTimestamptz(in.%s)", pascalName)
 	case "pgtype.Text":
 		return fmt.Sprintf("stringToPgtypeText(in.%s)", pascalName)
+	case "pgtype.Numeric":
+		return fmt.Sprintf("stringToNumeric(in.%s)", pascalName)
+	case "uuid.UUID":
+		return fmt.Sprintf("stringToUUID(in.%s)", pascalName)
+	case "json.RawMessage":
+		return fmt.Sprintf("stringToJSON(in.%s)", pascalName)
+	case "pgtype.Interval":
+		return fmt.Sprintf("int64ToInterval(in.%s)", pascalName)
+	case "int16":
+		return fmt.Sprintf("int16(in.%s)", pascalName)
 	default:
 		return fmt.Sprintf("in.%s", pascalName)
 	}
@@ -378,6 +432,7 @@ func generateReverseStandardConversionCode(sqlType string, field ProtoField) str
 func GenerateHelperFunctions(messages []ProtoMessage) string {
 	// Track which helper functions we need to generate
 	needNullString := false
+	needNullInt16 := false
 	needNullInt32 := false
 	needNullInt64 := false
 	needNullFloat64 := false
@@ -386,6 +441,11 @@ func GenerateHelperFunctions(messages []ProtoMessage) string {
 	needPgtypeDate := false
 	needPgtypeTimestamptz := false
 	needPgtypeText := false
+	needPgtypeNumeric := false
+	needUUID := false
+	needNullUUID := false
+	needJSON := false
+	needInterval := false
 
 	// Check which types are used in the messages
 	for _, msg := range messages {
@@ -393,6 +453,8 @@ func GenerateHelperFunctions(messages []ProtoMessage) string {
 			switch {
 			case strings.Contains(field.ConversionCode, "nullStringToString"):
 				needNullString = true
+			case strings.Contains(field.ConversionCode, "nullInt16ToInt32"):
+				needNullInt16 = true
 			case strings.Contains(field.ConversionCode, "nullInt32ToInt32"):
 				needNullInt32 = true
 			case strings.Contains(field.ConversionCode, "nullInt64ToInt64"):
@@ -409,11 +471,23 @@ func GenerateHelperFunctions(messages []ProtoMessage) string {
 				needPgtypeTimestamptz = true
 			case strings.Contains(field.ConversionCode, "pgtypeTextToString"):
 				needPgtypeText = true
+			case strings.Contains(field.ConversionCode, "numericToString"):
+				needPgtypeNumeric = true
+			case strings.Contains(field.ConversionCode, "uuidToString"):
+				needUUID = true
+			case strings.Contains(field.ConversionCode, "nullUUIDToString"):
+				needNullUUID = true
+			case strings.Contains(field.ConversionCode, "jsonToString"):
+				needJSON = true
+			case strings.Contains(field.ConversionCode, "intervalToInt64"):
+				needInterval = true
 			}
 
 			switch {
 			case strings.Contains(field.ReverseConversionCode, "stringToNullString"):
 				needNullString = true
+			case strings.Contains(field.ReverseConversionCode, "int32ToNullInt16"):
+				needNullInt16 = true
 			case strings.Contains(field.ReverseConversionCode, "int32ToNullInt32"):
 				needNullInt32 = true
 			case strings.Contains(field.ReverseConversionCode, "int64ToNullInt64"):
@@ -430,6 +504,16 @@ func GenerateHelperFunctions(messages []ProtoMessage) string {
 				needPgtypeTimestamptz = true
 			case strings.Contains(field.ReverseConversionCode, "stringToPgtypeText"):
 				needPgtypeText = true
+			case strings.Contains(field.ReverseConversionCode, "stringToNumeric"):
+				needPgtypeNumeric = true
+			case strings.Contains(field.ReverseConversionCode, "stringToUUID"):
+				needUUID = true
+			case strings.Contains(field.ReverseConversionCode, "stringToNullUUID"):
+				needNullUUID = true
+			case strings.Contains(field.ReverseConversionCode, "stringToJSON"):
+				needJSON = true
+			case strings.Contains(field.ReverseConversionCode, "int64ToInterval"):
+				needInterval = true
 			}
 		}
 	}
@@ -605,6 +689,115 @@ func stringToPgtypeText(v string) pgtype.Text {
 	return pgtype.Text{
 		String: v,
 		Valid:  v != "",
+	}
+}`)
+	}
+
+	if needNullInt16 {
+		helpers = append(helpers, `
+// Helper function to convert sql.NullInt16 to int32
+func nullInt16ToInt32(v sql.NullInt16) int32 {
+	if v.Valid {
+		return int32(v.Int16)
+	}
+	return 0
+}
+
+// Helper function to convert int32 to sql.NullInt16
+func int32ToNullInt16(v int32) sql.NullInt16 {
+	return sql.NullInt16{
+		Int16: int16(v),
+		Valid: v != 0,
+	}
+}`)
+	}
+
+	if needPgtypeNumeric {
+		helpers = append(helpers, `
+// Helper function to convert pgtype.Numeric to string
+func numericToString(v pgtype.Numeric) string {
+	if v.Valid {
+		return v.String()
+	}
+	return ""
+}
+
+// Helper function to convert string to pgtype.Numeric
+func stringToNumeric(v string) pgtype.Numeric {
+	var n pgtype.Numeric
+	n.Set(v)
+	return n
+}`)
+	}
+
+	if needUUID {
+		helpers = append(helpers, `
+// Helper function to convert uuid.UUID to string
+func uuidToString(v uuid.UUID) string {
+	return v.String()
+}
+
+// Helper function to convert string to uuid.UUID
+func stringToUUID(v string) uuid.UUID {
+	u, err := uuid.Parse(v)
+	if err != nil {
+		return uuid.Nil
+	}
+	return u
+}`)
+	}
+
+	if needNullUUID {
+		helpers = append(helpers, `
+// Helper function to convert uuid.NullUUID to string
+func nullUUIDToString(v uuid.NullUUID) string {
+	if v.Valid {
+		return v.UUID.String()
+	}
+	return ""
+}
+
+// Helper function to convert string to uuid.NullUUID
+func stringToNullUUID(v string) uuid.NullUUID {
+	if v == "" {
+		return uuid.NullUUID{}
+	}
+	u, err := uuid.Parse(v)
+	if err != nil {
+		return uuid.NullUUID{}
+	}
+	return uuid.NullUUID{
+		UUID:  u,
+		Valid: true,
+	}
+}`)
+	}
+
+	if needJSON {
+		helpers = append(helpers, `
+// Helper function to convert json.RawMessage to string
+func jsonToString(v json.RawMessage) string {
+	return string(v)
+}
+
+// Helper function to convert string to json.RawMessage
+func stringToJSON(v string) json.RawMessage {
+	return json.RawMessage(v)
+}`)
+	}
+
+	if needInterval {
+		helpers = append(helpers, `
+// Helper function to convert pgtype.Interval to int64
+func intervalToInt64(v pgtype.Interval) int64 {
+	return v.Microseconds
+}
+
+// Helper function to convert int64 to pgtype.Interval
+func int64ToInterval(v int64) pgtype.Interval {
+	return pgtype.Interval{
+		Microseconds: v,
+		Valid:        true,
 	}
 }`)
 	}
