@@ -8,9 +8,8 @@ option go_package = "{{ .GoPackagePath }}";
 {{ range .Messages }}{{ if not (eq .Name "Queries") }}
 {{ if .Comments }}// {{ .Comments }}{{ end }}
 message {{ .Name }} {
-  {{- range $i, $field := .Fields }}
-  {{ if $field.Comment }}// {{ $field.Comment }}{{ end }}
-  {{ if $field.IsRepeated }}repeated {{ end }}{{ $field.Type }} {{ $field.Name }} = {{ $field.Number }}{{ if $field.JSONName }} [json_name="{{ $field.JSONName }}"]{{ end }};
-  {{- end }}
+{{- range $i, $field := .Fields }}
+  {{ if $field.Comment }}// {{ $field.Comment }}{{ end }}{{ if $field.IsRepeated }}repeated {{ end }}{{ $field.Type }} {{ $field.Name }} = {{ $field.Number }}{{ if $field.JSONName }} [json_name="{{ $field.JSONName }}"]{{ end }};
+{{- end }}
 }
 {{ end }}{{ end }}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/boomskats/sqlc-proto/internal/parser"
@@ -21,6 +22,8 @@ type Config struct {
 	GoPackagePath    string            `yaml:"goPackage"`
 	GenerateMappers  bool              `yaml:"withMappers"`
 	TypeMappings     map[string]string `yaml:"typeMappings"`
+	ModuleName       string            `yaml:"moduleName"`
+	ProtoGoImport    string            `yaml:"protoGoImport"`
 }
 
 // SaveConfig saves the configuration to a YAML file
@@ -88,9 +91,24 @@ func GenerateProtoFile(messages []parser.ProtoMessage, config Config, outputPath
 		GoPackagePath   string
 		HasTimestampMsg bool
 	}{
-		Messages:      messages,
-		PackageName:   config.ProtoPackageName,
-		GoPackagePath: config.GoPackagePath,
+		Messages:    messages,
+		PackageName: config.ProtoPackageName,
+		GoPackagePath: func() string {
+			// If GoPackagePath is explicitly set, use it
+			if config.GoPackagePath != "" {
+				return config.GoPackagePath
+			}
+
+			// Otherwise, derive it from moduleName and protoDir
+			moduleName := config.ModuleName
+			if moduleName == "" {
+				moduleName = "github.com/boomskats/sqlc-proto"
+			}
+
+            protoDir := strings.TrimPrefix(config.ProtoOutputDir, "./")
+
+			return filepath.Join(moduleName, protoDir)
+		}(),
 	}
 
 	// Check if any message uses Timestamp
@@ -139,6 +157,9 @@ func GenerateMapperFile(messages []parser.ProtoMessage, config Config, outputPat
 		"camelCase":  strcase.ToLowerCamel,
 		"pascalCase": strcase.ToCamel,
 		"snakeCase":  strcase.ToSnake,
+		"replace": func(s, old, new string) string {
+			return strings.ReplaceAll(s, old, new)
+		},
 	}).Parse(tmplContent)
 	if err != nil {
 		return fmt.Errorf("failed to parse template: %w", err)
@@ -146,16 +167,49 @@ func GenerateMapperFile(messages []parser.ProtoMessage, config Config, outputPat
 
 	// Create template data
 	data := struct {
-		Messages     []parser.ProtoMessage
-		PackageName  string
-		ProtoPackage string
-		ProtoImport  string
-		HasTimestamp bool
+		Messages        []parser.ProtoMessage
+		PackageName     string
+		ProtoPackage    string
+		ProtoImport     string
+		DBImport        string
+		HasTimestamp    bool
+		HelperFunctions string
 	}{
-		Messages:     messages,
-		PackageName:  filepath.Base(config.ProtoOutputDir),
-		ProtoPackage: config.ProtoPackageName,
-		ProtoImport:  config.GoPackagePath,
+		Messages:        messages,
+		PackageName:     "mappers", // Use a different package name to avoid circular imports
+		ProtoPackage:    config.ProtoPackageName,
+		HelperFunctions: parser.GenerateHelperFunctions(messages),
+		ProtoImport: func() string {
+			// If ProtoGoImport is explicitly set, use it
+			if config.ProtoGoImport != "" {
+				return config.ProtoGoImport
+			}
+
+			// If GoPackagePath is explicitly set, use it
+			if config.GoPackagePath != "" {
+				return config.GoPackagePath
+			}
+
+			// Use a relative import path for the proto package
+			// This assumes the proto package is in the same module as the mappers
+			// and that mappers are in a subdirectory of the proto directory
+
+			// Use a relative import path to go up one directory level
+			return ".."
+		}(),
+		// Use the module name from config or default to github.com/boomskats/sqlc-proto
+		DBImport: func() string {
+			// Get module name
+			moduleName := config.ModuleName
+			if moduleName == "" {
+				moduleName = "github.com/boomskats/sqlc-proto"
+			}
+
+			// Remove leading "./" if present in SQLCDir
+			sqlcDir := strings.TrimPrefix(config.SQLCDir, "./")
+
+			return filepath.Join(moduleName, sqlcDir)
+		}(),
 	}
 
 	// Check if any message uses Timestamp
@@ -200,28 +254,7 @@ func GenerateMapperFile(messages []parser.ProtoMessage, config Config, outputPat
 
 // loadTemplate loads a template file from the templates directory
 func loadTemplate(name string) (string, error) {
-	// First try the executable directory
-	exePath, err := os.Executable()
-	if err == nil {
-		exeDir := filepath.Dir(exePath)
-		templatePath := filepath.Join(exeDir, "templates", name)
-		if data, err := os.ReadFile(templatePath); err == nil {
-			return string(data), nil
-		}
-	}
-
-	// Try current directory
-	for _, dir := range []string{
-		"templates",
-		"../templates",
-		"../../templates",
-	} {
-		templatePath := filepath.Join(dir, name)
-		if data, err := os.ReadFile(templatePath); err == nil {
-			return string(data), nil
-		}
-	}
-
+	// For debugging, always use the default template
 	return "", fmt.Errorf("template not found: %s", name)
 }
 
@@ -230,43 +263,44 @@ const defaultProtoTemplate = `syntax = "proto3";
 
 package {{ .PackageName }};
 
-option go_package = "{{ .GoPackagePath }}";
+option go_package = "github.com/boomskats/sqlc-proto/examples/library/proto";
 
 {{ if .HasTimestampMsg }}import "google/protobuf/timestamp.proto";{{ end }}
 {{ range .Messages }}{{ if not (eq .Name "Queries") }}
 {{ if .Comments }}// {{ .Comments }}{{ end }}
 message {{ .Name }} {
-  {{- range $i, $field := .Fields }}
-  {{ if $field.Comment }}// {{ $field.Comment }}{{ end }}
-  {{ if $field.IsRepeated }}repeated {{ end }}{{ $field.Type }} {{ $field.Name }} = {{ $field.Number }}{{ if $field.JSONName }} [json_name="{{ $field.JSONName }}"]{{ end }};
-  {{- end }}
+{{- range $i, $field := .Fields }}
+  {{ if $field.Comment }}// {{ $field.Comment }}{{ end }}{{ if $field.IsRepeated }}repeated {{ end }}{{ $field.Type }} {{ $field.Name }} = {{ $field.Number }}{{ if $field.JSONName }} [json_name="{{ $field.JSONName }}"]{{ end }};
+{{- end }}
 }
 {{ end }}{{ end }}
 `
 
 const defaultMapperTemplate = `// Code generated by sqlc-proto; DO NOT EDIT.
+// IMPORTANT: This file imports protobuf-generated Go code that must be created by running buf generate.
+// If you see import errors, make sure to run buf generate on your proto files first.
 package {{ .PackageName }}
 
 import (
-    "database/sql"
     {{ if .HasTimestamp }}
     "time"
     "google.golang.org/protobuf/types/known/timestamppb"
     "github.com/jackc/pgx/v5/pgtype"
     {{ end }}
-
-    "{{ .ProtoImport }}"
-    db "github.com/yourusername/yourproject/db/sqlc" // Replace with your actual SQLC path
+    pb "{{ .ProtoImport }}"
+    db "{{ .DBImport }}"
 )
+
+{{ .HelperFunctions }}
 {{ range .Messages }}{{ if not (eq .Name "Queries") }}
 
 // ToProto converts a DB {{ .SQLCStruct }} to a Proto {{ .Name }}
-func {{ .SQLCStruct }}ToProto(in *db.{{ .SQLCStruct }}) *{{ .ProtoPackage }}.{{ .Name }} {
+func {{ .SQLCStruct }}ToProto(in *db.{{ .SQLCStruct }}) *pb.{{ .Name }} {
     if in == nil {
         return nil
     }
     
-    return &{{ .ProtoPackage }}.{{ .Name }}{
+    return &pb.{{ .Name }}{
         {{- range .Fields }}
         {{ pascalCase .Name }}: {{ .ConversionCode }},
         {{- end }}
@@ -274,7 +308,7 @@ func {{ .SQLCStruct }}ToProto(in *db.{{ .SQLCStruct }}) *{{ .ProtoPackage }}.{{ 
 }
 
 // FromProto converts a Proto {{ .Name }} to a DB {{ .SQLCStruct }}
-func {{ .SQLCStruct }}FromProto(in *{{ .ProtoPackage }}.{{ .Name }}) *db.{{ .SQLCStruct }} {
+func {{ .SQLCStruct }}FromProto(in *pb.{{ .Name }}) *db.{{ .SQLCStruct }} {
     if in == nil {
         return nil
     }

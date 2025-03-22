@@ -265,17 +265,17 @@ func camelToSnake(s string) string {
 func generateNullableConversionCode(sqlType string, field ProtoField) string {
 	switch sqlType {
 	case "sql.NullString":
-		return fmt.Sprintf("func() string { if in.%s.Valid { return in.%s.String } return \"\" }()", field.SQLCName, field.SQLCName)
+		return fmt.Sprintf("nullStringToString(in.%s)", field.SQLCName)
 	case "sql.NullInt32":
-		return fmt.Sprintf("func() int32 { if in.%s.Valid { return in.%s.Int32 } return 0 }()", field.SQLCName, field.SQLCName)
+		return fmt.Sprintf("nullInt32ToInt32(in.%s)", field.SQLCName)
 	case "sql.NullInt64":
-		return fmt.Sprintf("func() int64 { if in.%s.Valid { return in.%s.Int64 } return 0 }()", field.SQLCName, field.SQLCName)
+		return fmt.Sprintf("nullInt64ToInt64(in.%s)", field.SQLCName)
 	case "sql.NullFloat64":
-		return fmt.Sprintf("func() float64 { if in.%s.Valid { return in.%s.Float64 } return 0 }()", field.SQLCName, field.SQLCName)
+		return fmt.Sprintf("nullFloat64ToFloat64(in.%s)", field.SQLCName)
 	case "sql.NullBool":
-		return fmt.Sprintf("func() bool { if in.%s.Valid { return in.%s.Bool } return false }()", field.SQLCName, field.SQLCName)
+		return fmt.Sprintf("nullBoolToBool(in.%s)", field.SQLCName)
 	case "sql.NullTime":
-		return fmt.Sprintf("func() *timestamppb.Timestamp { if in.%s.Valid { return timestamppb.New(in.%s.Time) } return nil }()", field.SQLCName, field.SQLCName)
+		return fmt.Sprintf("nullTimeToTimestamp(in.%s)", field.SQLCName)
 	default:
 		return fmt.Sprintf("in.%s", field.SQLCName)
 	}
@@ -288,17 +288,17 @@ func generateReverseNullableConversionCode(sqlType string, field ProtoField) str
 
 	switch sqlType {
 	case "sql.NullString":
-		return fmt.Sprintf("sql.NullString{String: in.%s, Valid: in.%s != \"\"}", pascalName, pascalName)
+		return fmt.Sprintf("stringToNullString(in.%s)", pascalName)
 	case "sql.NullInt32":
-		return fmt.Sprintf("sql.NullInt32{Int32: in.%s, Valid: in.%s != 0}", pascalName, pascalName)
+		return fmt.Sprintf("int32ToNullInt32(in.%s)", pascalName)
 	case "sql.NullInt64":
-		return fmt.Sprintf("sql.NullInt64{Int64: in.%s, Valid: in.%s != 0}", pascalName, pascalName)
+		return fmt.Sprintf("int64ToNullInt64(in.%s)", pascalName)
 	case "sql.NullFloat64":
-		return fmt.Sprintf("sql.NullFloat64{Float64: in.%s, Valid: in.%s != 0}", pascalName, pascalName)
+		return fmt.Sprintf("float64ToNullFloat64(in.%s)", pascalName)
 	case "sql.NullBool":
-		return fmt.Sprintf("sql.NullBool{Bool: in.%s, Valid: true}", pascalName)
+		return fmt.Sprintf("boolToNullBool(in.%s)", pascalName)
 	case "sql.NullTime":
-		return fmt.Sprintf("func() sql.NullTime { if in.%s != nil { return sql.NullTime{Time: in.%s.AsTime(), Valid: true} } return sql.NullTime{} }()", pascalName, pascalName)
+		return fmt.Sprintf("timestampToNullTime(in.%s)", pascalName)
 	default:
 		return fmt.Sprintf("in.%s", pascalName)
 	}
@@ -310,11 +310,11 @@ func generateStandardConversionCode(sqlType string, field ProtoField) string {
 	case "time.Time":
 		return fmt.Sprintf("timestamppb.New(in.%s)", field.SQLCName)
 	case "pgtype.Date":
-		return fmt.Sprintf("func() *timestamppb.Timestamp { t := in.%s.Time; return timestamppb.New(time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)) }()", field.SQLCName)
+		return fmt.Sprintf("dateToTimestamp(in.%s)", field.SQLCName)
 	case "pgtype.Timestamptz":
-		return fmt.Sprintf("func() *timestamppb.Timestamp { if in.%s.Valid { return timestamppb.New(in.%s.Time) } return nil }()", field.SQLCName, field.SQLCName)
+		return fmt.Sprintf("timestamptzToTimestamp(in.%s)", field.SQLCName)
 	case "pgtype.Text":
-		return fmt.Sprintf("func() string { if in.%s.Valid { return in.%s.String } return \"\" }()", field.SQLCName, field.SQLCName)
+		return fmt.Sprintf("pgtypeTextToString(in.%s)", field.SQLCName)
 	default:
 		return fmt.Sprintf("in.%s", field.SQLCName)
 	}
@@ -329,12 +329,250 @@ func generateReverseStandardConversionCode(sqlType string, field ProtoField) str
 	case "time.Time":
 		return fmt.Sprintf("in.%s.AsTime()", pascalName)
 	case "pgtype.Date":
-		return fmt.Sprintf("pgtype.Date{Time: in.%s.AsTime(), Valid: in.%s != nil}", pascalName, pascalName)
+		return fmt.Sprintf("timestampToDate(in.%s)", pascalName)
 	case "pgtype.Timestamptz":
-		return fmt.Sprintf("pgtype.Timestamptz{Time: in.%s.AsTime(), Valid: in.%s != nil}", pascalName, pascalName)
+		return fmt.Sprintf("timestampToTimestamptz(in.%s)", pascalName)
 	case "pgtype.Text":
-		return fmt.Sprintf("pgtype.Text{String: in.%s, Valid: in.%s != \"\"}", pascalName, pascalName)
+		return fmt.Sprintf("stringToPgtypeText(in.%s)", pascalName)
 	default:
 		return fmt.Sprintf("in.%s", pascalName)
 	}
+}
+
+// GenerateHelperFunctions generates helper functions for type conversions
+func GenerateHelperFunctions(messages []ProtoMessage) string {
+	// Track which helper functions we need to generate
+	needNullString := false
+	needNullInt32 := false
+	needNullInt64 := false
+	needNullFloat64 := false
+	needNullBool := false
+	needNullTime := false
+	needPgtypeDate := false
+	needPgtypeTimestamptz := false
+	needPgtypeText := false
+
+	// Check which types are used in the messages
+	for _, msg := range messages {
+		for _, field := range msg.Fields {
+			switch {
+			case strings.Contains(field.ConversionCode, "nullStringToString"):
+				needNullString = true
+			case strings.Contains(field.ConversionCode, "nullInt32ToInt32"):
+				needNullInt32 = true
+			case strings.Contains(field.ConversionCode, "nullInt64ToInt64"):
+				needNullInt64 = true
+			case strings.Contains(field.ConversionCode, "nullFloat64ToFloat64"):
+				needNullFloat64 = true
+			case strings.Contains(field.ConversionCode, "nullBoolToBool"):
+				needNullBool = true
+			case strings.Contains(field.ConversionCode, "nullTimeToTimestamp"):
+				needNullTime = true
+			case strings.Contains(field.ConversionCode, "dateToTimestamp"):
+				needPgtypeDate = true
+			case strings.Contains(field.ConversionCode, "timestamptzToTimestamp"):
+				needPgtypeTimestamptz = true
+			case strings.Contains(field.ConversionCode, "pgtypeTextToString"):
+				needPgtypeText = true
+			}
+
+			switch {
+			case strings.Contains(field.ReverseConversionCode, "stringToNullString"):
+				needNullString = true
+			case strings.Contains(field.ReverseConversionCode, "int32ToNullInt32"):
+				needNullInt32 = true
+			case strings.Contains(field.ReverseConversionCode, "int64ToNullInt64"):
+				needNullInt64 = true
+			case strings.Contains(field.ReverseConversionCode, "float64ToNullFloat64"):
+				needNullFloat64 = true
+			case strings.Contains(field.ReverseConversionCode, "boolToNullBool"):
+				needNullBool = true
+			case strings.Contains(field.ReverseConversionCode, "timestampToNullTime"):
+				needNullTime = true
+			case strings.Contains(field.ReverseConversionCode, "timestampToDate"):
+				needPgtypeDate = true
+			case strings.Contains(field.ReverseConversionCode, "timestampToTimestamptz"):
+				needPgtypeTimestamptz = true
+			case strings.Contains(field.ReverseConversionCode, "stringToPgtypeText"):
+				needPgtypeText = true
+			}
+		}
+	}
+
+	var helpers []string
+
+	// Add helper functions based on what's needed
+	if needNullString {
+		helpers = append(helpers, `
+// Helper function to convert sql.NullString to string
+func nullStringToString(v sql.NullString) string {
+	if v.Valid {
+		return v.String
+	}
+	return ""
+}
+
+// Helper function to convert string to sql.NullString
+func stringToNullString(v string) sql.NullString {
+	return sql.NullString{
+		String: v,
+		Valid:  v != "",
+	}
+}`)
+	}
+
+	if needNullInt32 {
+		helpers = append(helpers, `
+// Helper function to convert sql.NullInt32 to int32
+func nullInt32ToInt32(v sql.NullInt32) int32 {
+	if v.Valid {
+		return v.Int32
+	}
+	return 0
+}
+
+// Helper function to convert int32 to sql.NullInt32
+func int32ToNullInt32(v int32) sql.NullInt32 {
+	return sql.NullInt32{
+		Int32: v,
+		Valid: v != 0,
+	}
+}`)
+	}
+
+	if needNullInt64 {
+		helpers = append(helpers, `
+// Helper function to convert sql.NullInt64 to int64
+func nullInt64ToInt64(v sql.NullInt64) int64 {
+	if v.Valid {
+		return v.Int64
+	}
+	return 0
+}
+
+// Helper function to convert int64 to sql.NullInt64
+func int64ToNullInt64(v int64) sql.NullInt64 {
+	return sql.NullInt64{
+		Int64: v,
+		Valid: v != 0,
+	}
+}`)
+	}
+
+	if needNullFloat64 {
+		helpers = append(helpers, `
+// Helper function to convert sql.NullFloat64 to float64
+func nullFloat64ToFloat64(v sql.NullFloat64) float64 {
+	if v.Valid {
+		return v.Float64
+	}
+	return 0
+}
+
+// Helper function to convert float64 to sql.NullFloat64
+func float64ToNullFloat64(v float64) sql.NullFloat64 {
+	return sql.NullFloat64{
+		Float64: v,
+		Valid:   v != 0,
+	}
+}`)
+	}
+
+	if needNullBool {
+		helpers = append(helpers, `
+// Helper function to convert sql.NullBool to bool
+func nullBoolToBool(v sql.NullBool) bool {
+	if v.Valid {
+		return v.Bool
+	}
+	return false
+}
+
+// Helper function to convert bool to sql.NullBool
+func boolToNullBool(v bool) sql.NullBool {
+	return sql.NullBool{
+		Bool:  v,
+		Valid: true,
+	}
+}`)
+	}
+
+	if needNullTime {
+		helpers = append(helpers, `
+// Helper function to convert sql.NullTime to *timestamppb.Timestamp
+func nullTimeToTimestamp(v sql.NullTime) *timestamppb.Timestamp {
+	if v.Valid {
+		return timestamppb.New(v.Time)
+	}
+	return nil
+}
+
+// Helper function to convert *timestamppb.Timestamp to sql.NullTime
+func timestampToNullTime(v *timestamppb.Timestamp) sql.NullTime {
+	if v != nil {
+		return sql.NullTime{
+			Time:  v.AsTime(),
+			Valid: true,
+		}
+	}
+	return sql.NullTime{}
+}`)
+	}
+
+	if needPgtypeDate {
+		helpers = append(helpers, `
+// Helper function to convert pgtype.Date to *timestamppb.Timestamp
+func dateToTimestamp(v pgtype.Date) *timestamppb.Timestamp {
+	t := v.Time
+	return timestamppb.New(time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC))
+}
+
+// Helper function to convert *timestamppb.Timestamp to pgtype.Date
+func timestampToDate(v *timestamppb.Timestamp) pgtype.Date {
+	return pgtype.Date{
+		Time:  v.AsTime(),
+		Valid: v != nil,
+	}
+}`)
+	}
+
+	if needPgtypeTimestamptz {
+		helpers = append(helpers, `
+// Helper function to convert pgtype.Timestamptz to *timestamppb.Timestamp
+func timestamptzToTimestamp(v pgtype.Timestamptz) *timestamppb.Timestamp {
+	if v.Valid {
+		return timestamppb.New(v.Time)
+	}
+	return nil
+}
+
+// Helper function to convert *timestamppb.Timestamp to pgtype.Timestamptz
+func timestampToTimestamptz(v *timestamppb.Timestamp) pgtype.Timestamptz {
+	return pgtype.Timestamptz{
+		Time:  v.AsTime(),
+		Valid: v != nil,
+	}
+}`)
+	}
+
+	if needPgtypeText {
+		helpers = append(helpers, `
+// Helper function to convert pgtype.Text to string
+func pgtypeTextToString(v pgtype.Text) string {
+	if v.Valid {
+		return v.String
+	}
+	return ""
+}
+
+// Helper function to convert string to pgtype.Text
+func stringToPgtypeText(v string) pgtype.Text {
+	return pgtype.Text{
+		String: v,
+		Valid:  v != "",
+	}
+}`)
+	}
+
+	return strings.Join(helpers, "\n")
 }
