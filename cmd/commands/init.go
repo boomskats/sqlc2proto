@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/boomskats/sqlc2proto/cmd/sqlc2proto/common"
-	"github.com/boomskats/sqlc2proto/internal/generator"
+	"github.com/boomskats/sqlc2proto/cmd/common"
 	"github.com/spf13/cobra"
 )
 
@@ -31,20 +30,25 @@ You can then edit this file to customize the behavior of sqlc2proto.`,
 			}
 
 			// Create config file with default values
-			config := generator.Config{
+			config := common.Config{
 				SQLCDir:          "./db/sqlc",
 				ProtoOutputDir:   "./proto/gen",
 				ProtoPackageName: "api.v1",
 				GoPackagePath:    "",
 				GenerateMappers:  false,
-				ModuleName:       "",
-				TypeMappings:     map[string]string{},
-				ProtoGoImport:    "",     // Import path for protobuf-generated Go code
-				FieldStyle:       "json", // Default to using JSON tags
+				GenerateServices: false,
+				ServiceNaming:    "entity",
+				ServiceSuffix:    "Service",
+				// Note: GenerateImpl field has been removed as Connect-RPC tooling
+				// will generate the service implementation code from the proto definitions.
+				ModuleName:    "",
+				TypeMappings:  map[string]string{},
+				ProtoGoImport: "",     // Import path for protobuf-generated Go code
+				FieldStyle:    "json", // Default to using JSON tags
 			}
 
 			// Try to parse go.mod file to get module name
-			moduleName, err := common.ParseGoModFile()
+			moduleName, err := common.GetModuleNameFromGoMod()
 			if err == nil {
 				// If we found a module name, use it to set GoPackagePath
 				config.ModuleName = moduleName

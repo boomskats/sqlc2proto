@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/boomskats/sqlc2proto/internal/generator"
+    common "github.com/boomskats/sqlc2proto/cmd/common"
 	"github.com/spf13/cobra"
 )
+
 
 // customHelpTemplate is a custom help template that displays commands in our desired order
 const customHelpTemplate = `{{with (or .Long .Short)}}{{. | trimTrailingWhitespaces}}
@@ -35,15 +36,7 @@ var (
 	Version = "dev"
 
 	// Config holds the global configuration
-	Config = generator.Config{
-		SQLCDir:          "./db/sqlc",
-		ProtoOutputDir:   "./proto/gen",
-		ProtoPackageName: "api.v1",
-		GoPackagePath:    "",
-		GenerateMappers:  false,
-		ModuleName:       "",
-		ProtoGoImport:    "",
-	}
+	Config = common.DefaultConfig()
 )
 
 // NewRootCmd creates the root command

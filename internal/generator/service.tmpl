@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package {{ .PackageName }};
+
+option go_package = "{{ .GoPackagePath }}";
+
+import "{{ .ModelsProtoRef }}";
+{{ if .HasTimestamp }}import "google/protobuf/timestamp.proto";{{ end }}
+
+{{ range .Services }}
+// {{ .Description }}
+service {{ .Name }} {
+  {{- range .Methods }}
+  {{ if .Description }}  // {{ .Description }}{{ end }}
+  rpc {{ .Name }}({{ .RequestType }}) returns ({{ if .StreamingServer }}stream {{ end }}{{ .ResponseType }});
+  {{- end }}
+}
+
+{{ range .Methods }}
+// Request message for {{ .Name }}
+message {{ .RequestType }} {
+  {{- range .RequestFields }}
+  {{ if .Comment }}  // {{ .Comment }}{{ end }}
+  {{ if .IsRepeated }}repeated {{ end }}{{ if .IsOptional }}optional {{ end }}{{ .Type }} {{ .Name }} = {{ .Number }};
+  {{- end }}
+}
+
+// Response message for {{ .Name }}
+message {{ .ResponseType }} {
+  {{- range .ResponseFields }}
+  {{ if .Comment }}  // {{ .Comment }}{{ end }}
+  {{ if .IsRepeated }}repeated {{ end }}{{ if .IsOptional }}optional {{ end }}{{ .Type }} {{ .Name }} = {{ .Number }};
+  {{- end }}
+}
+{{ end }}
+
+{{ end }}

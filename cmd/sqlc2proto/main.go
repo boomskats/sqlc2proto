@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/boomskats/sqlc2proto/cmd/sqlc2proto/commands"
+	"github.com/boomskats/sqlc2proto/cmd/commands"
 )
 
 var (

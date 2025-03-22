@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/boomskats/sqlc2proto/cmd/sqlc2proto/common"
+	"github.com/boomskats/sqlc2proto/cmd/common"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +29,7 @@ It helps identify issues in the workflow between sqlc2proto and buf generate.`,
 				}
 			} else {
 				// Try default config locations
-				common.TryLoadDefaultConfig(&Config, verbose)
+				common.TryLoadDefaultConfig(Config, verbose)
 			}
 
 			if verbose {

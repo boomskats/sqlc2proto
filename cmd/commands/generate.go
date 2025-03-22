@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/boomskats/sqlc2proto/cmd/sqlc2proto/common"
+	"github.com/boomskats/sqlc2proto/cmd/common"
 	"github.com/boomskats/sqlc2proto/internal/generator"
 	"github.com/boomskats/sqlc2proto/internal/parser"
 	"github.com/spf13/cobra"
@@ -22,7 +22,7 @@ This command processes sqlc-generated Go structs and creates corresponding Proto
 definitions, with a focus on Connect-RPC compatibility.
 
 Example:
-	 sqlc2proto generate --sqlc-dir=./db/sqlc --proto-dir=./proto --package=api.v1 --with-mappers
+	 sqlc2proto generate --sqlc-dir=./db/sqlc --proto-dir=./proto --package=api.v1 --with-mappers --with-services
 `,
 		Run: func(cmd *cobra.Command, args []string) {
 			configFile, _ := cmd.Flags().GetString("config")
@@ -36,14 +36,14 @@ Example:
 					os.Exit(1)
 				}
 			} else {
-				// Try default config locations
-				common.TryLoadDefaultConfig(&Config, verbose)
+				// Try default config locations (sqlc2proto.yaml, sqlc2proto.yml, .sqlc2proto.yaml, .sqlc2proto.yml)
+				common.TryLoadDefaultConfig(Config, verbose)
 			}
 
 			// If go package is still empty, try to parse go.mod file
 			if Config.GoPackagePath == "" {
 				// Try to parse go.mod file to get module name
-				moduleName, err := common.ParseGoModFile()
+				moduleName, err := common.GetModuleNameFromGoMod()
 				if err == nil && Config.ModuleName == "" {
 					// If we found a module name and it's not already set, use it
 					Config.ModuleName = moduleName
@@ -65,7 +65,7 @@ Example:
 
 			// Ensure output directory exists
 			if !dryRun {
-				if err := os.MkdirAll(Config.ProtoOutputDir, 0755); err != nil {
+				if err := os.MkdirAll(Config.ProtoOutputDir, 0o755); err != nil {
 					fmt.Printf("Failed to create output directory: %v\n", err)
 					os.Exit(1)
 				}
@@ -109,7 +109,7 @@ Example:
 				// Create mappers directory
 				mappersDir := filepath.Join(Config.ProtoOutputDir, "mappers")
 				if !dryRun {
-					if err := os.MkdirAll(mappersDir, 0755); err != nil {
+					if err := os.MkdirAll(mappersDir, 0o755); err != nil {
 						fmt.Printf("Failed to create mappers directory: %v\n", err)
 						os.Exit(1)
 					}
@@ -126,6 +126,41 @@ Example:
 					fmt.Printf("Generated mapper functions in %s\n", mapperPath)
 				}
 			}
+
+			// Generate service definitions if requested
+			if Config.GenerateServices {
+				// Parse the Querier interface
+				queryMethods, err := parser.ParseSQLCQuerierInterface(Config.SQLCDir)
+				if err != nil {
+					if verbose {
+						fmt.Printf("Warning: Failed to parse Querier interface: %v\n", err)
+						fmt.Println("Make sure sqlc is configured with emit_interface: true")
+						fmt.Println("Skipping service generation...")
+					}
+				} else {
+					if verbose {
+						fmt.Printf("Found %d query methods in Querier interface\n", len(queryMethods))
+						for _, method := range queryMethods {
+							fmt.Printf("  - %s (returns %s)\n", method.Name, method.ReturnType)
+						}
+					}
+
+					// Generate service definitions
+					services := parser.GenerateServiceDefinitions(queryMethods, messages)
+
+					// Generate service.proto file
+					servicePath := filepath.Join(Config.ProtoOutputDir, "service.proto")
+					if dryRun {
+						fmt.Printf("Would generate service file: %s\n", servicePath)
+					} else {
+						if err := generator.GenerateServiceFile(services, Config, servicePath); err != nil {
+							fmt.Printf("Failed to generate service file: %v\n", err)
+							os.Exit(1)
+						}
+						fmt.Printf("Generated service definitions in %s\n", servicePath)
+					}
+				}
+			}
 		},
 	}
 
@@ -137,6 +172,7 @@ Example:
 	generateCmd.Flags().StringVar(&Config.ModuleName, "module", Config.ModuleName, "Module name for import paths")
 	generateCmd.Flags().StringVar(&Config.ProtoGoImport, "proto-go-import", Config.ProtoGoImport, "Import path for protobuf-generated Go code")
 	generateCmd.Flags().BoolVar(&Config.GenerateMappers, "with-mappers", Config.GenerateMappers, "Generate conversion functions between sqlc and proto types")
+	generateCmd.Flags().BoolVar(&Config.GenerateServices, "with-services", Config.GenerateServices, "Generate service definitions from sqlc queries")
 	generateCmd.Flags().StringVar(&Config.FieldStyle, "field-style", Config.FieldStyle, "Field naming style: 'json' (use json tags), 'snake_case' (convert to snake_case), or 'original' (keep original casing)")
 	generateCmd.Flags().Bool("dry-run", false, "Show what would be generated without writing files")
 

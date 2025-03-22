@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/boomskats/sqlc2proto/internal/generator"
 	"github.com/boomskats/sqlc2proto/internal/parser"
 )
 
@@ -20,12 +19,12 @@ var DefaultConfigPaths = []string{
 }
 
 // LoadConfigFile loads configuration from a YAML file
-func LoadConfigFile(path string, cfg *generator.Config, verbose bool) error {
+func LoadConfigFile(path string, cfg *Config, verbose bool) error {
 	if verbose {
 		fmt.Printf("Loading config from %s\n", path)
 	}
 
-	config, err := generator.LoadConfig(path)
+	config, err := LoadConfig(path)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -46,6 +45,20 @@ func LoadConfigFile(path string, cfg *generator.Config, verbose bool) error {
 	if config.GenerateMappers {
 		cfg.GenerateMappers = true
 	}
+	if config.GenerateServices {
+		cfg.GenerateServices = true
+	}
+	if config.ServiceNaming != "" {
+		cfg.ServiceNaming = config.ServiceNaming
+	}
+	if config.ServicePrefix != "" {
+		cfg.ServicePrefix = config.ServicePrefix
+	}
+	if config.ServiceSuffix != "" {
+		cfg.ServiceSuffix = config.ServiceSuffix
+	}
+	// Note: GenerateImpl field has been removed as Connect-RPC tooling
+	// will generate the service implementation code from the proto definitions.
 	if len(config.TypeMappings) > 0 {
 		parser.AddCustomTypeMappings(config.TypeMappings)
 	}
@@ -66,10 +79,10 @@ func LoadConfigFile(path string, cfg *generator.Config, verbose bool) error {
 }
 
 // TryLoadDefaultConfig attempts to load configuration from default paths
-func TryLoadDefaultConfig(cfg *generator.Config, verbose bool) bool {
+func TryLoadDefaultConfig(cfg Config, verbose bool) bool {
 	for _, path := range DefaultConfigPaths {
 		if _, err := os.Stat(path); err == nil {
-			if err := LoadConfigFile(path, cfg, verbose); err != nil {
+			if err := LoadConfigFile(path, &cfg, verbose); err != nil {
 				fmt.Printf("Error loading config file: %v\n", err)
 				os.Exit(1)
 			}
@@ -93,8 +106,8 @@ func InferGoPackage(protoPackage string, moduleName string) string {
 	return fmt.Sprintf("github.com/yourusername/yourproject/gen/%s", protoPackage)
 }
 
-// ParseGoModFile reads the first line of the go.mod file and extracts the module name
-func ParseGoModFile() (string, error) {
+// GetModuleNameFromGoMod reads the first line of the go.mod file and extracts the module name
+func GetModuleNameFromGoMod() (string, error) {
 	// Check if go.mod exists
 	if _, err := os.Stat("go.mod"); os.IsNotExist(err) {
 		return "", fmt.Errorf("go.mod file not found")
@@ -129,7 +142,7 @@ func ParseGoModFile() (string, error) {
 }
 
 // PrintConfig prints the current configuration
-func PrintConfig(cfg generator.Config) {
+func PrintConfig(cfg Config) {
 	fmt.Println("Using configuration:")
 	fmt.Printf("  SQLC Directory:    %s\n", cfg.SQLCDir)
 	fmt.Printf("  Proto Directory:   %s\n", cfg.ProtoOutputDir)
@@ -138,11 +151,21 @@ func PrintConfig(cfg generator.Config) {
 	fmt.Printf("  Go Package:        %s\n", cfg.GoPackagePath)
 	fmt.Printf("  Module Name:       %s\n", cfg.ModuleName)
 	fmt.Printf("  Generate Mappers:  %t\n", cfg.GenerateMappers)
+	fmt.Printf("  Generate Services: %t\n", cfg.GenerateServices)
+	if cfg.GenerateServices {
+		fmt.Printf("  Service Naming:    %s\n", cfg.ServiceNaming)
+		if cfg.ServicePrefix != "" {
+			fmt.Printf("  Service Prefix:    %s\n", cfg.ServicePrefix)
+		}
+		fmt.Printf("  Service Suffix:    %s\n", cfg.ServiceSuffix)
+		// Note: Generate Impl has been removed as Connect-RPC tooling
+		// will generate the service implementation code from the proto definitions.
+	}
 	fmt.Printf("  Field Style:       %s\n", cfg.FieldStyle)
 }
 
 // WriteConfigWithComments writes the configuration to a YAML file with comments
-func WriteConfigWithComments(config generator.Config, path string) error {
+func WriteConfigWithComments(config Config, path string) error {
 	// Create the content with comments
 	content := `# sqlcDir is the directory containing sqlc-generated models.go
 sqlcDir: "` + config.SQLCDir + `"
@@ -161,6 +184,24 @@ protoPackage: "` + config.ProtoPackageName + `"
 	}
 
 	content += `withMappers: ` + fmt.Sprintf("%t", config.GenerateMappers) + `
+
+# Service generation options
+# withServices enables generation of service definitions from sqlc queries
+withServices: ` + fmt.Sprintf("%t", config.GenerateServices) + `
+# serviceNaming controls how services are named and organized
+# Options: "entity" (group by entity), "flat" (one service), or "custom"
+serviceNaming: "` + config.ServiceNaming + `"
+# servicePrefix is an optional prefix for service names
+` + (func() string {
+		if config.ServicePrefix != "" {
+			return `servicePrefix: "` + config.ServicePrefix + `"`
+		}
+		return `# servicePrefix: "API"`
+	})() + `
+# serviceSuffix is a suffix for service names (default: "Service")
+serviceSuffix: "` + config.ServiceSuffix + `"
+# Note: Service implementation generation has been removed as Connect-RPC tooling
+# will generate the service implementation code from the proto definitions.
 # moduleName is used to derive import paths for the generated code
 `
 	if config.ModuleName != "" {
@@ -218,21 +259,5 @@ nullableTypeMappings:
 	}
 
 	// Write the content to the file
-	return os.WriteFile(path, []byte(content), 0644)
-}
-
-// DefaultConfig returns a default configuration
-func DefaultConfig() generator.Config {
-	return generator.Config{
-		SQLCDir:              "./db/sqlc",
-		ProtoOutputDir:       "./proto/gen",
-		ProtoPackageName:     "api.v1",
-		GoPackagePath:        "",
-		GenerateMappers:      false,
-		ModuleName:           "",
-		ProtoGoImport:        "",
-		FieldStyle:           "json", // Default to using JSON tags
-		TypeMappings:         map[string]string{},
-		NullableTypeMappings: map[string]string{},
-	}
+	return os.WriteFile(path, []byte(content), 0o644)
 }
