@@ -1,0 +1,7 @@
+sqlcDir: "./db/sqlc"
+protoDir: "./proto"
+protoPackage: "library.api.v1"
+goPackage: "github.com/boomskats/libraryexample/gen/library/api/v1"
+withMappers: true
+typeMappings:
+  "ISBN": "string"
