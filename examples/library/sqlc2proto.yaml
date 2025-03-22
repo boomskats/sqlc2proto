@@ -1,0 +1,18 @@
+# sqlcDir is the directory containing sqlc-generated models.go
+sqlcDir: "./db/sqlc"
+# protoDir is the target directory for the generated protobuf files
+protoDir: "./proto"
+# protoPackage is the package name for the generated protobuf files
+protoPackage: "library.api.v1"
+# goPackage is optional and will be derived from moduleName if not specified
+# goPackage: "github.com/boomskats/sqlc2proto/examples/library/proto"
+withMappers: true
+# moduleName is used to derive import paths for the generated code
+moduleName: "github.com/boomskats/sqlc2proto/examples/library"
+# protoGoImport specifies the import path for the protobuf-generated Go code
+# This should match the go_package option in your buf.yaml or the output of buf generate
+protoGoImport: "github.com/boomskats/sqlc2proto/examples/library/proto"
+# typeMappings is a map of SQLC type names to protobuf type names
+typeMappings:
+  "ISBN": "string"
+

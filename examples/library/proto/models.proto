@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package library.api.v1;
 
-option go_package = "github.com/boomskats/sqlc-proto/examples/library/proto";
+option go_package = "github.com/boomskats/sqlc2proto/examples/library/proto";
 
 import "google/protobuf/timestamp.proto";
 
