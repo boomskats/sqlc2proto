@@ -1,0 +1,15 @@
+version: v1
+name: buf.build/boomskats/library
+deps:
+  - buf.build/googleapis/googleapis
+build:
+  excludes: []
+lint:
+  use:
+    - DEFAULT
+  except:
+    - PACKAGE_VERSION_SUFFIX
+    - SERVICE_SUFFIX
+breaking:
+  use:
+    - FILE
