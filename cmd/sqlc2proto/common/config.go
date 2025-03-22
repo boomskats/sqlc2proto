@@ -55,6 +55,9 @@ func LoadConfigFile(path string, cfg *generator.Config, verbose bool) error {
 	if config.ProtoGoImport != "" {
 		cfg.ProtoGoImport = config.ProtoGoImport
 	}
+	if config.FieldStyle != "" {
+		cfg.FieldStyle = config.FieldStyle
+	}
 
 	return nil
 }
@@ -132,6 +135,7 @@ func PrintConfig(cfg generator.Config) {
 	fmt.Printf("  Go Package:        %s\n", cfg.GoPackagePath)
 	fmt.Printf("  Module Name:       %s\n", cfg.ModuleName)
 	fmt.Printf("  Generate Mappers:  %t\n", cfg.GenerateMappers)
+	fmt.Printf("  Field Style:       %s\n", cfg.FieldStyle)
 }
 
 // WriteConfigWithComments writes the configuration to a YAML file with comments
@@ -175,7 +179,11 @@ protoPackage: "` + config.ProtoPackageName + `"
 `
 	}
 
-	content += `# typeMappings is a map of SQLC type names to protobuf type names
+	content += `# fieldStyle controls how field names are generated in protobuf
+# Options: "json" (use json tags), "snake_case" (convert to snake_case), or "original" (keep original casing)
+fieldStyle: "` + config.FieldStyle + `"
+
+# typeMappings is a map of SQLC type names to protobuf type names
 typeMappings:
 `
 	if len(config.TypeMappings) > 0 {
@@ -202,5 +210,6 @@ func DefaultConfig() generator.Config {
 		GenerateMappers:  false,
 		ModuleName:       "",
 		ProtoGoImport:    "",
+		FieldStyle:       "json", // Default to using JSON tags
 	}
 }

@@ -69,7 +69,7 @@ func AddCustomTypeMappings(mappings map[string]string) {
 }
 
 // ProcessSQLCDirectory processes all Go files in the sqlc output directory
-func ProcessSQLCDirectory(dir string) ([]ProtoMessage, error) {
+func ProcessSQLCDirectory(dir string, fieldStyle string) ([]ProtoMessage, error) {
 	var messages []ProtoMessage
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -82,7 +82,7 @@ func ProcessSQLCDirectory(dir string) ([]ProtoMessage, error) {
 				return nil
 			}
 
-			fileMessages, err := processSQLCFile(path)
+			fileMessages, err := processSQLCFile(path, fieldStyle)
 			if err != nil {
 				return fmt.Errorf("error processing file %s: %v", path, err)
 			}
@@ -95,7 +95,7 @@ func ProcessSQLCDirectory(dir string) ([]ProtoMessage, error) {
 }
 
 // processSQLCFile extracts message definitions from a sqlc-generated Go file
-func processSQLCFile(filePath string) ([]ProtoMessage, error) {
+func processSQLCFile(filePath string, fieldStyle string) ([]ProtoMessage, error) {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
@@ -140,8 +140,43 @@ func processSQLCFile(filePath string) ([]ProtoMessage, error) {
 					continue // Skip unexported fields
 				}
 
+				// Determine field name based on style
+				var protoFieldName string
+
+				// Extract JSON tag if present
+				jsonTagName := ""
+				if field.Tag != nil {
+					tagValue := strings.Trim(field.Tag.Value, "`")
+					if jsonTag := extractTag(tagValue, "json"); jsonTag != "" {
+						jsonName := strings.Split(jsonTag, ",")[0]
+						if jsonName != "-" {
+							jsonTagName = jsonName
+						}
+					}
+				}
+
+				// Apply field naming style
+				switch fieldStyle {
+				case "json":
+					// Use JSON tag if available, otherwise fall back to snake_case
+					if jsonTagName != "" {
+						protoFieldName = jsonTagName
+					} else {
+						protoFieldName = camelToSnake(fieldName)
+					}
+				case "snake_case":
+					// Always convert to snake_case regardless of JSON tag
+					protoFieldName = camelToSnake(fieldName)
+				case "original":
+					// Keep original Go field name
+					protoFieldName = fieldName
+				default:
+					// Default to snake_case if style is not recognized
+					protoFieldName = camelToSnake(fieldName)
+				}
+
 				protoField := ProtoField{
-					Name:     camelToSnake(fieldName),
+					Name:     protoFieldName,
 					Number:   i + 1,
 					Comment:  extractComments(field.Doc),
 					SQLCName: fieldName,

@@ -39,7 +39,8 @@ You can then edit this file to customize the behavior of sqlc2proto.`,
 				GenerateMappers:  false,
 				ModuleName:       "",
 				TypeMappings:     map[string]string{},
-				ProtoGoImport:    "", // Import path for protobuf-generated Go code
+				ProtoGoImport:    "",     // Import path for protobuf-generated Go code
+				FieldStyle:       "json", // Default to using JSON tags
 			}
 
 			// Try to parse go.mod file to get module name

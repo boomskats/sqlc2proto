@@ -72,7 +72,7 @@ Example:
 			}
 
 			// Process sqlc directory
-			messages, err := parser.ProcessSQLCDirectory(Config.SQLCDir)
+			messages, err := parser.ProcessSQLCDirectory(Config.SQLCDir, Config.FieldStyle)
 			if err != nil {
 				fmt.Printf("Failed to process sqlc directory: %v\n", err)
 				os.Exit(1)
@@ -137,6 +137,7 @@ Example:
 	generateCmd.Flags().StringVar(&Config.ModuleName, "module", Config.ModuleName, "Module name for import paths")
 	generateCmd.Flags().StringVar(&Config.ProtoGoImport, "proto-go-import", Config.ProtoGoImport, "Import path for protobuf-generated Go code")
 	generateCmd.Flags().BoolVar(&Config.GenerateMappers, "with-mappers", Config.GenerateMappers, "Generate conversion functions between sqlc and proto types")
+	generateCmd.Flags().StringVar(&Config.FieldStyle, "field-style", Config.FieldStyle, "Field naming style: 'json' (use json tags), 'snake_case' (convert to snake_case), or 'original' (keep original casing)")
 	generateCmd.Flags().Bool("dry-run", false, "Show what would be generated without writing files")
 
 	return generateCmd

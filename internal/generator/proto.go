@@ -24,6 +24,7 @@ type Config struct {
 	TypeMappings     map[string]string `yaml:"typeMappings"`
 	ModuleName       string            `yaml:"moduleName"`
 	ProtoGoImport    string            `yaml:"protoGoImport"`
+	FieldStyle       string            `yaml:"fieldStyle"` // "json", "snake_case", or "original"
 }
 
 // SaveConfig saves the configuration to a YAML file
