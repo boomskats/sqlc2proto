@@ -1,18 +1,42 @@
 # sqlcDir is the directory containing sqlc-generated models.go
 sqlcDir: "./db/sqlc"
 # protoDir is the target directory for the generated protobuf files
-protoDir: "./proto"
+protoDir: "./proto/gen"
 # protoPackage is the package name for the generated protobuf files
-protoPackage: "library.api.v1"
+protoPackage: "api.v1"
 # goPackage is optional and will be derived from moduleName if not specified
-# goPackage: "github.com/boomskats/sqlc2proto/examples/library/proto"
+# goPackage: "github.com/yourusername/yourproject/proto"
 withMappers: true
+
+# Service generation options
+# withServices enables generation of service definitions from sqlc queries
+withServices: true
+# serviceNaming controls how services are named and organized
+# Options: "entity" (group by entity), "flat" (one service), or "custom"
+serviceNaming: "entity"
+# servicePrefix is an optional prefix for service names
+# servicePrefix: "API"
+# serviceSuffix is a suffix for service names (default: "Service")
+serviceSuffix: "Service"
+# Note: Service implementation generation has been removed as Connect-RPC tooling
+# will generate the service implementation code from the proto definitions.
 # moduleName is used to derive import paths for the generated code
-moduleName: "github.com/boomskats/sqlc2proto/examples/library"
+# moduleName: "github.com/yourusername/yourproject"
 # protoGoImport specifies the import path for the protobuf-generated Go code
 # This should match the go_package option in your buf.yaml or the output of buf generate
-protoGoImport: "github.com/boomskats/sqlc2proto/examples/library/proto"
+# protoGoImport: "github.com/yourusername/yourproject/proto"
+# fieldStyle controls how field names are generated in protobuf
+# Options: "json" (use json tags), "snake_case" (convert to snake_case), or "original" (keep original casing)
+fieldStyle: "json"
+
 # typeMappings is a map of SQLC type names to protobuf type names
 typeMappings:
-  "ISBN": "string"
+#  "CustomType": "string"
+#  "time.Time": "string"  # Override default
+#  "uuid.UUID": "bytes"   # Use bytes instead of string for UUIDs
 
+# nullableTypeMappings is a map of SQLC nullable type names to protobuf type names
+nullableTypeMappings:
+#  "sql.NullString": "google.protobuf.StringValue"  # Use wrapper types
+#  "sql.NullInt64": "int64"
+#  "uuid.NullUUID": "string"

@@ -7,6 +7,7 @@ import (
 
 	"github.com/boomskats/sqlc2proto/cmd/common"
 	"github.com/boomskats/sqlc2proto/internal/generator"
+	"github.com/boomskats/sqlc2proto/internal/includes"
 	"github.com/boomskats/sqlc2proto/internal/parser"
 	"github.com/spf13/cobra"
 )
@@ -71,6 +72,32 @@ Example:
 				}
 			}
 
+			// Check if includeFile is specified and exists
+			var includesData *includes.IncludesFile
+			if Config.IncludeFile != "" {
+				if verbose {
+					fmt.Printf("Looking for includes file at %s\n", Config.IncludeFile)
+				}
+
+				// Try to load the includes file
+				includesFile, err := includes.LoadIncludesFile(Config.IncludeFile)
+				if err != nil {
+					if os.IsNotExist(err) {
+						fmt.Printf("Includes file %s not found. Run 'sqlc2proto getincludes' to generate it.\n", Config.IncludeFile)
+						fmt.Println("Proceeding with generating all models and queries...")
+					} else {
+						fmt.Printf("Error loading includes file: %v\n", err)
+						os.Exit(1) // Halt on parsing errors
+					}
+				} else {
+					includesData = &includesFile
+					if verbose {
+						fmt.Printf("Loaded includes file with %d models and %d queries\n",
+							len(includesFile.Models), len(includesFile.Queries))
+					}
+				}
+			}
+
 			// Process sqlc directory
 			messages, err := parser.ProcessSQLCDirectory(Config.SQLCDir, Config.FieldStyle)
 			if err != nil {
@@ -78,8 +105,63 @@ Example:
 				os.Exit(1)
 			}
 
+			// Parse the Querier interface if service generation is enabled
+			var queryMethods []parser.QueryMethod
+			if Config.GenerateServices {
+				queryMethods, err = parser.ParseSQLCQuerierInterface(Config.SQLCDir)
+				if err != nil {
+					if verbose {
+						fmt.Printf("Warning: Failed to parse Querier interface: %v\n", err)
+						fmt.Println("Make sure sqlc is configured with emit_interface: true")
+						fmt.Println("Skipping service generation...")
+					}
+				}
+			}
+
+			// Filter messages and queries based on includes file
+			if includesData != nil && (len(includesData.Models) > 0 || len(includesData.Queries) > 0) {
+				// Resolve dependencies for included queries
+				resolvedIncludes := includes.ResolveDependencies(*includesData, queryMethods, messages)
+
+				if verbose {
+					// Log which models are included due to dependencies
+					additions := includes.GetDependencyAdditions(*includesData, resolvedIncludes)
+					if len(additions) > 0 {
+						fmt.Println("Models included due to dependencies:")
+						for _, model := range additions {
+							fmt.Printf("  - %s\n", model)
+						}
+					}
+				}
+
+				// Filter messages
+				var filteredMessages []parser.ProtoMessage
+				for _, msg := range messages {
+					if includes.IsModelIncluded(resolvedIncludes, msg.Name) {
+						filteredMessages = append(filteredMessages, msg)
+					}
+				}
+				messages = filteredMessages
+
+				// Filter query methods
+				if len(queryMethods) > 0 {
+					var filteredQueryMethods []parser.QueryMethod
+					for _, method := range queryMethods {
+						if includes.IsQueryIncluded(*includesData, method.Name) {
+							filteredQueryMethods = append(filteredQueryMethods, method)
+						}
+					}
+					queryMethods = filteredQueryMethods
+				}
+
+				if verbose {
+					fmt.Printf("After filtering: %d message types and %d query methods\n",
+						len(messages), len(queryMethods))
+				}
+			}
+
 			if verbose {
-				fmt.Printf("Found %d message types in %s\n", len(messages), Config.SQLCDir)
+				fmt.Printf("Generating %d message types from %s\n", len(messages), Config.SQLCDir)
 				for _, msg := range messages {
 					fmt.Printf("  - %s (%d fields)\n", msg.Name, len(msg.Fields))
 				}
@@ -128,38 +210,30 @@ Example:
 			}
 
 			// Generate service definitions if requested
-			if Config.GenerateServices {
-				// Parse the Querier interface
-				queryMethods, err := parser.ParseSQLCQuerierInterface(Config.SQLCDir)
-				if err != nil {
-					if verbose {
-						fmt.Printf("Warning: Failed to parse Querier interface: %v\n", err)
-						fmt.Println("Make sure sqlc is configured with emit_interface: true")
-						fmt.Println("Skipping service generation...")
-					}
-				} else {
-					if verbose {
-						fmt.Printf("Found %d query methods in Querier interface\n", len(queryMethods))
-						for _, method := range queryMethods {
-							fmt.Printf("  - %s (returns %s)\n", method.Name, method.ReturnType)
-						}
-					}
-
-					// Generate service definitions
-					services := parser.GenerateServiceDefinitions(queryMethods, messages)
-
-					// Generate service.proto file
-					servicePath := filepath.Join(Config.ProtoOutputDir, "service.proto")
-					if dryRun {
-						fmt.Printf("Would generate service file: %s\n", servicePath)
-					} else {
-						if err := generator.GenerateServiceFile(services, Config, servicePath); err != nil {
-							fmt.Printf("Failed to generate service file: %v\n", err)
-							os.Exit(1)
-						}
-						fmt.Printf("Generated service definitions in %s\n", servicePath)
+			if Config.GenerateServices && len(queryMethods) > 0 {
+				if verbose {
+					fmt.Printf("Generating services for %d query methods\n", len(queryMethods))
+					for _, method := range queryMethods {
+						fmt.Printf("  - %s (returns %s)\n", method.Name, method.ReturnType)
 					}
 				}
+
+				// Generate service definitions
+				services := parser.GenerateServiceDefinitions(queryMethods, messages)
+
+				// Generate service.proto file
+				servicePath := filepath.Join(Config.ProtoOutputDir, "service.proto")
+				if dryRun {
+					fmt.Printf("Would generate service file: %s\n", servicePath)
+				} else {
+					if err := generator.GenerateServiceFile(services, Config, servicePath); err != nil {
+						fmt.Printf("Failed to generate service file: %v\n", err)
+						os.Exit(1)
+					}
+					fmt.Printf("Generated service definitions in %s\n", servicePath)
+				}
+			} else if Config.GenerateServices && len(queryMethods) == 0 {
+				fmt.Println("No query methods found or selected. Skipping service generation.")
 			}
 		},
 	}
@@ -174,6 +248,7 @@ Example:
 	generateCmd.Flags().BoolVar(&Config.GenerateMappers, "with-mappers", Config.GenerateMappers, "Generate conversion functions between sqlc and proto types")
 	generateCmd.Flags().BoolVar(&Config.GenerateServices, "with-services", Config.GenerateServices, "Generate service definitions from sqlc queries")
 	generateCmd.Flags().StringVar(&Config.FieldStyle, "field-style", Config.FieldStyle, "Field naming style: 'json' (use json tags), 'snake_case' (convert to snake_case), or 'original' (keep original casing)")
+	generateCmd.Flags().StringVar(&Config.IncludeFile, "include-file", Config.IncludeFile, "Path to file specifying which models and queries to include")
 	generateCmd.Flags().Bool("dry-run", false, "Show what would be generated without writing files")
 
 	return generateCmd

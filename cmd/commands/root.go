@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"os"
 
-    common "github.com/boomskats/sqlc2proto/cmd/common"
+	common "github.com/boomskats/sqlc2proto/cmd/common"
 	"github.com/spf13/cobra"
 )
-
 
 // customHelpTemplate is a custom help template that displays commands in our desired order
 const customHelpTemplate = `{{with (or .Long .Short)}}{{. | trimTrailingWhitespaces}}
@@ -20,6 +19,7 @@ Available Commands:
   {{- if (eq .Name "sqlc2proto")}}
   help        Help about any command
   init        Initialize a new sqlc2proto configuration file
+  getincludes Generate a template file for selecting models and queries
   generate    Generate Protocol Buffers from sqlc structs
   check       Check the generated files for correctness
   completion  Generate the autocompletion script for the specified shell
@@ -82,12 +82,14 @@ Simply type ` + rootCmd.Name() + ` help [path to command] for full details.`,
 		},
 	}
 	initCmd := NewInitCmd()
+	getIncludesCmd := NewGetIncludesCmd()
 	generateCmd := NewGenerateCmd()
 	checkCmd := NewCheckCmd()
 
 	// Add commands to root in the order we want them to appear
 	rootCmd.AddCommand(helpCmd)
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(getIncludesCmd)
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(checkCmd)
 

@@ -34,6 +34,9 @@ type Config struct {
 
 	// Extended service options
 	ServiceOptions ServiceOptions `yaml:"serviceOptions"`
+
+	// Includes file for selective generation
+	IncludeFile string `yaml:"includeFile"` // Path to file specifying which models and queries to include
 }
 
 // ServiceOptions contains configuration options for service generation
@@ -72,6 +75,7 @@ func DefaultConfig() Config {
 		TypeMappings:         map[string]string{},
 		NullableTypeMappings: map[string]string{},
 		ServiceOptions:       DefaultServiceOptions(),
+		IncludeFile:          "sqlc2proto.includes.yaml",
 	}
 }
 

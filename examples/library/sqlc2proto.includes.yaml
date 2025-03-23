@@ -1,0 +1,23 @@
+models:
+- Book
+# - Loan
+- Member
+# - CreateBookParams
+# - CreateLoanParams
+# - CreateMemberParams
+# - ListBooksParams
+# - ListMembersParams
+# - SearchBooksParams
+
+queries:
+# - CreateBook
+# - CreateLoan
+# - CreateMember
+- GetBook
+# - GetLoan
+- GetMember
+# - ListActiveLoansByMember
+- ListBooks
+# - ListMembers
+# - ReturnBook
+# - SearchBooks

@@ -146,7 +146,8 @@ func GenerateServiceFile(services []parser.ServiceDefinition, config common.Conf
 
 			// Use the proto output directory directly, just ensure it's in the correct format
 			// by removing any leading "./" and using forward slashes
-			protoDir := strings.TrimPrefix(config.ProtoOutputDir, "./")
+			// protoDir := strings.TrimPrefix(config.ProtoOutputDir, "./")
+			protoDir := ""
 
 			// Join with models.proto to get the full import path
 			return filepath.Join(protoDir, "models.proto")

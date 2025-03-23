@@ -74,6 +74,9 @@ func LoadConfigFile(path string, cfg *Config, verbose bool) error {
 	if config.FieldStyle != "" {
 		cfg.FieldStyle = config.FieldStyle
 	}
+	if config.IncludeFile != "" {
+		cfg.IncludeFile = config.IncludeFile
+	}
 
 	return nil
 }
@@ -162,6 +165,9 @@ func PrintConfig(cfg Config) {
 		// will generate the service implementation code from the proto definitions.
 	}
 	fmt.Printf("  Field Style:       %s\n", cfg.FieldStyle)
+	if cfg.IncludeFile != "" {
+		fmt.Printf("  Include File:      %s\n", cfg.IncludeFile)
+	}
 }
 
 // WriteConfigWithComments writes the configuration to a YAML file with comments
@@ -226,6 +232,15 @@ serviceSuffix: "` + config.ServiceSuffix + `"
 	content += `# fieldStyle controls how field names are generated in protobuf
 # Options: "json" (use json tags), "snake_case" (convert to snake_case), or "original" (keep original casing)
 fieldStyle: "` + config.FieldStyle + `"
+
+# includeFile specifies the path to a file that lists which models and queries to include
+# If not specified or the file doesn't exist, all models and queries will be included
+` + (func() string {
+		if config.IncludeFile != "" {
+			return `includeFile: "` + config.IncludeFile + `"`
+		}
+		return `# includeFile: "sqlc2proto.includes.yaml"`
+	})() + `
 
 # typeMappings is a map of SQLC type names to protobuf type names
 typeMappings:
