@@ -29,7 +29,7 @@ It helps identify issues in the workflow between sqlc2proto and buf generate.`,
 				}
 			} else {
 				// Try default config locations
-				common.TryLoadDefaultConfig(Config, verbose)
+				common.TryLoadDefaultConfig(&Config, verbose)
 			}
 
 			if verbose {

@@ -37,7 +37,7 @@ Example:
 				}
 			} else {
 				// Try default config locations (sqlc2proto.yaml, sqlc2proto.yml, .sqlc2proto.yaml, .sqlc2proto.yml)
-				common.TryLoadDefaultConfig(Config, verbose)
+				common.TryLoadDefaultConfig(&Config, verbose)
 			}
 
 			// If go package is still empty, try to parse go.mod file

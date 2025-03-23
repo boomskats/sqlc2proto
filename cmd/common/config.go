@@ -79,10 +79,10 @@ func LoadConfigFile(path string, cfg *Config, verbose bool) error {
 }
 
 // TryLoadDefaultConfig attempts to load configuration from default paths
-func TryLoadDefaultConfig(cfg Config, verbose bool) bool {
+func TryLoadDefaultConfig(cfg *Config, verbose bool) bool {
 	for _, path := range DefaultConfigPaths {
 		if _, err := os.Stat(path); err == nil {
-			if err := LoadConfigFile(path, &cfg, verbose); err != nil {
+			if err := LoadConfigFile(path, cfg, verbose); err != nil {
 				fmt.Printf("Error loading config file: %v\n", err)
 				os.Exit(1)
 			}
