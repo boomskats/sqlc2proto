@@ -23,6 +23,7 @@ var TypeMapping = map[string]string{
 	"uuid.UUID":          "string", // Added for UUID
 	"json.RawMessage":    "string", // Added for JSON
 	"pgtype.Interval":    "int64",  // Added for interval
+	"pgconn.CommandTag":  "string", // Added for command tag results
 }
 
 // NullableTypeMapping maps sqlc nullable types to Protobuf types
@@ -70,6 +71,10 @@ var ConversionMapping = map[string]ConversionFuncs{
 	"pgtype.Interval": {
 		ToProto:   "intervalToInt64(%s)",
 		FromProto: "int64ToInterval(%s)",
+	},
+	"pgconn.CommandTag": {
+		ToProto:   "commandTagToString(%s)",
+		FromProto: "stringToCommandTag(%s)",
 	},
 	"int16": {
 		ToProto:   "int32(%s)",

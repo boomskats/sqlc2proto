@@ -12,7 +12,6 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
-
 // ParseSQLCQuerierInterface parses the Querier interface in a sqlc-generated directory
 func ParseSQLCQuerierInterface(dir string) ([]QueryMethod, error) {
 	// Look for the file containing the Querier interface
@@ -126,11 +125,11 @@ func ParseSQLCQuerierInterface(dir string) ([]QueryMethod, error) {
 		}
 
 		// Infer query type if not already determined
-		if queryType == QueryTypeExec && (strings.HasPrefix(methodName, "Get") || 
-		   strings.HasPrefix(methodName, "Find") || strings.HasPrefix(methodName, "Lookup")) {
+		if queryType == QueryTypeExec && (strings.HasPrefix(methodName, "Get") ||
+			strings.HasPrefix(methodName, "Find") || strings.HasPrefix(methodName, "Lookup")) {
 			queryType = QueryTypeOne
-		} else if queryType == QueryTypeExec && (strings.HasPrefix(methodName, "List") || 
-		           strings.HasPrefix(methodName, "Search") || strings.HasPrefix(methodName, "Query")) {
+		} else if queryType == QueryTypeExec && (strings.HasPrefix(methodName, "List") ||
+			strings.HasPrefix(methodName, "Search") || strings.HasPrefix(methodName, "Query")) {
 			queryType = QueryTypeMany
 		}
 
@@ -274,10 +273,10 @@ func GenerateServiceDefinitions(queryMethods []QueryMethod, messages []ProtoMess
 
 		for _, method := range methods {
 			serviceMethod := ServiceMethod{
-				Name:         method.Name,
-				Description:  method.Comment,
-				RequestType:  method.Name + "Request",
-				ResponseType: method.Name + "Response",
+				Name:          method.Name,
+				Description:   method.Comment,
+				RequestType:   method.Name + "Request",
+				ResponseType:  method.Name + "Response",
 				OriginalQuery: &method,
 			}
 
@@ -288,22 +287,22 @@ func GenerateServiceDefinitions(queryMethods []QueryMethod, messages []ProtoMess
 					if _, ok := messageMap[param.Type]; ok {
 						// If it's a known message type, include it directly
 						protoField := ProtoField{
-							Name:     strcase.ToSnake(param.Type),
-							Type:     param.Type,
-							Number:   i + 1,
-							Comment:  fmt.Sprintf("%s to process", param.Type),
+							Name:    strcase.ToSnake(param.Type),
+							Type:    param.Type,
+							Number:  i + 1,
+							Comment: fmt.Sprintf("%s to process", param.Type),
 						}
 						serviceMethod.RequestFields = append(serviceMethod.RequestFields, protoField)
 					} else {
 						// For primitive types or unknown types, use the parameter name
 						// Map Go type to Proto type
 						protoType := mapGoTypeToProtoType(param.Type)
-						
+
 						protoField := ProtoField{
-							Name:     strcase.ToSnake(param.Name),
-							Type:     protoType,
-							Number:   i + 1,
-							Comment:  fmt.Sprintf("%s parameter", param.Name),
+							Name:    strcase.ToSnake(param.Name),
+							Type:    protoType,
+							Number:  i + 1,
+							Comment: fmt.Sprintf("%s parameter", param.Name),
 						}
 						serviceMethod.RequestFields = append(serviceMethod.RequestFields, protoField)
 					}
@@ -325,29 +324,29 @@ func GenerateServiceDefinitions(queryMethods []QueryMethod, messages []ProtoMess
 
 					if !hasLimit {
 						serviceMethod.RequestFields = append(serviceMethod.RequestFields, ProtoField{
-							Name:     "limit",
-							Type:     "int32",
-							Number:   len(serviceMethod.RequestFields) + 1,
-							Comment:  "Maximum number of results to return",
+							Name:    "limit",
+							Type:    "int32",
+							Number:  len(serviceMethod.RequestFields) + 1,
+							Comment: "Maximum number of results to return",
 						})
 					}
 
 					if !hasOffset {
 						serviceMethod.RequestFields = append(serviceMethod.RequestFields, ProtoField{
-							Name:     "page_token",
-							Type:     "string",
-							Number:   len(serviceMethod.RequestFields) + 1,
-							Comment:  "Page token for pagination",
+							Name:    "page_token",
+							Type:    "string",
+							Number:  len(serviceMethod.RequestFields) + 1,
+							Comment: "Page token for pagination",
 						})
 					}
 				}
 			} else if strings.HasPrefix(method.Name, "Get") || strings.HasPrefix(method.Name, "Delete") {
 				// For Get and Delete methods without parameters, add an ID field
 				serviceMethod.RequestFields = append(serviceMethod.RequestFields, ProtoField{
-					Name:     strcase.ToSnake(entity) + "_id",
-					Type:     "int32",
-					Number:   1,
-					Comment:  fmt.Sprintf("ID of the %s", entity),
+					Name:    strcase.ToSnake(entity) + "_id",
+					Type:    "int32",
+					Number:  1,
+					Comment: fmt.Sprintf("ID of the %s", entity),
 				})
 			}
 
@@ -356,10 +355,10 @@ func GenerateServiceDefinitions(queryMethods []QueryMethod, messages []ProtoMess
 				if !method.IsArray {
 					// For single result methods
 					serviceMethod.ResponseFields = append(serviceMethod.ResponseFields, ProtoField{
-						Name:     strcase.ToSnake(method.ReturnType),
-						Type:     method.ReturnType,
-						Number:   1,
-						Comment:  fmt.Sprintf("The %s result", method.ReturnType),
+						Name:    strcase.ToSnake(method.ReturnType),
+						Type:    method.ReturnType,
+						Number:  1,
+						Comment: fmt.Sprintf("The %s result", method.ReturnType),
 					})
 				} else {
 					// For list/array result methods
@@ -374,34 +373,34 @@ func GenerateServiceDefinitions(queryMethods []QueryMethod, messages []ProtoMess
 					// Add pagination metadata for list methods
 					if strings.HasPrefix(method.Name, "List") {
 						serviceMethod.ResponseFields = append(serviceMethod.ResponseFields, ProtoField{
-							Name:     "next_page_token",
-							Type:     "string",
-							Number:   2,
-							Comment:  "Token for retrieving the next page of results",
+							Name:    "next_page_token",
+							Type:    "string",
+							Number:  2,
+							Comment: "Token for retrieving the next page of results",
 						})
 
 						serviceMethod.ResponseFields = append(serviceMethod.ResponseFields, ProtoField{
-							Name:     "total_size",
-							Type:     "int32",
-							Number:   3,
-							Comment:  "Total number of results available",
+							Name:    "total_size",
+							Type:    "int32",
+							Number:  3,
+							Comment: "Total number of results available",
 						})
 					}
 				}
 			} else if method.Type == QueryTypeExec {
 				// For exec-type methods with no return value, add a success flag
 				serviceMethod.ResponseFields = append(serviceMethod.ResponseFields, ProtoField{
-					Name:     "success",
-					Type:     "bool",
-					Number:   1,
-					Comment:  "Whether the operation was successful",
+					Name:    "success",
+					Type:    "bool",
+					Number:  1,
+					Comment: "Whether the operation was successful",
 				})
 
 				serviceMethod.ResponseFields = append(serviceMethod.ResponseFields, ProtoField{
-					Name:     "affected_rows",
-					Type:     "int32",
-					Number:   2,
-					Comment:  "Number of rows affected by the operation",
+					Name:    "affected_rows",
+					Type:    "int32",
+					Number:  2,
+					Comment: "Number of rows affected by the operation",
 				})
 			}
 
@@ -418,7 +417,7 @@ func GenerateServiceDefinitions(queryMethods []QueryMethod, messages []ProtoMess
 func inferEntityFromMethodName(methodName string) string {
 	// Common prefixes for CRUD operations
 	prefixes := []string{
-		"Get", "List", "Create", "Update", "Delete", 
+		"Get", "List", "Create", "Update", "Delete",
 		"Find", "Search", "Count", "Lookup", "Add",
 	}
 
@@ -426,18 +425,18 @@ func inferEntityFromMethodName(methodName string) string {
 		if strings.HasPrefix(methodName, prefix) {
 			// Remove the prefix
 			entity := strings.TrimPrefix(methodName, prefix)
-			
+
 			// Handle special cases with suffixes
 			suffixes := []string{"ByID", "ById", "WithDetails", "WithRelations"}
 			for _, suffix := range suffixes {
 				entity = strings.TrimSuffix(entity, suffix)
 			}
-			
+
 			// Handle plural forms for list operations
 			if prefix == "List" && strings.HasSuffix(entity, "s") {
 				entity = strings.TrimSuffix(entity, "s")
 			}
-			
+
 			// If we have a valid entity name, return it
 			if entity != "" {
 				return entity
@@ -451,25 +450,13 @@ func inferEntityFromMethodName(methodName string) string {
 
 // mapGoTypeToProtoType converts Go types to Protocol Buffer types
 func mapGoTypeToProtoType(goType string) string {
-	mapping := map[string]string{
-		"int":           "int32",
-		"int32":         "int32",
-		"int64":         "int64",
-		"uint":          "uint32",
-		"uint32":        "uint32",
-		"uint64":        "uint64",
-		"float32":       "float",
-		"float64":       "double",
-		"bool":          "bool",
-		"string":        "string",
-		"[]byte":        "bytes",
-		"time.Time":     "google.protobuf.Timestamp",
-	}
+	// Use the global TypeMapping map instead of a hardcoded mapping
+	// This ensures consistency with model type mappings and allows for custom mappings
 
 	// Handle pointer types
 	if strings.HasPrefix(goType, "*") {
 		baseType := strings.TrimPrefix(goType, "*")
-		if protoType, ok := mapping[baseType]; ok {
+		if protoType, ok := TypeMapping[baseType]; ok {
 			return protoType
 		}
 		return baseType // Pass through as is
@@ -479,14 +466,14 @@ func mapGoTypeToProtoType(goType string) string {
 	if strings.HasPrefix(goType, "[]") {
 		// For arrays, we'll handle the repeated tag separately
 		baseType := strings.TrimPrefix(goType, "[]")
-		if protoType, ok := mapping[baseType]; ok {
+		if protoType, ok := TypeMapping[baseType]; ok {
 			return protoType
 		}
 		return baseType // Pass through as is
 	}
 
 	// Direct mapping
-	if protoType, ok := mapping[goType]; ok {
+	if protoType, ok := TypeMapping[goType]; ok {
 		return protoType
 	}
 

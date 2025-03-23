@@ -2,12 +2,12 @@ package generator
 
 import (
 	"bytes"
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
-    _ "embed"
 
 	"github.com/boomskats/sqlc2proto/cmd/common"
 	"github.com/boomskats/sqlc2proto/internal/parser"
@@ -15,6 +15,7 @@ import (
 )
 
 // Template content from embedded files
+//
 //go:embed proto.tmpl
 var protoTemplate string
 
@@ -129,6 +130,8 @@ func GenerateMapperFile(messages []parser.ProtoMessage, config common.Config, ou
 		ProtoImport     string
 		DBImport        string
 		HasTimestamp    bool
+		HasPgType       bool
+		HasPgConn       bool
 		HelperFunctions string
 	}{
 		Messages:        messages,
@@ -168,15 +171,32 @@ func GenerateMapperFile(messages []parser.ProtoMessage, config common.Config, ou
 		}(),
 	}
 
-	// Check if any message uses Timestamp
+	// Check if any message uses Timestamp, pgtype, or pgconn
 	for _, msg := range messages {
 		for _, field := range msg.Fields {
+			// Check for Timestamp
 			if field.Type == "google.protobuf.Timestamp" {
 				data.HasTimestamp = true
+			}
+
+			// Check for pgtype
+			if strings.HasPrefix(field.OriginalTag, "pgtype.") {
+				data.HasPgType = true
+			}
+
+			// Check for pgconn
+			if strings.HasPrefix(field.OriginalTag, "pgconn.") {
+				data.HasPgConn = true
+			}
+
+			// If we've found all types, we can break early
+			if data.HasTimestamp && data.HasPgType && data.HasPgConn {
 				break
 			}
 		}
-		if data.HasTimestamp {
+
+		// If we've found all types, we can break early
+		if data.HasTimestamp && data.HasPgType && data.HasPgConn {
 			break
 		}
 	}

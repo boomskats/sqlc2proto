@@ -40,7 +40,6 @@ type ProtoField struct {
 	ReverseConversionCode string
 }
 
-
 // ParserConfig holds configuration for the parser
 type ParserConfig struct {
 	FieldStyle string
@@ -57,7 +56,7 @@ func DefaultTypeMappingConfig() TypeMappingConfig {
 		StandardTypes: map[string]string{
 			"string":             "string",
 			"int":                "int32",
-			"int16":              "int32", 
+			"int16":              "int32",
 			"int32":              "int32",
 			"int64":              "int64",
 			"float32":            "float",
@@ -166,7 +165,7 @@ func ProcessSQLCDirectory(dir string, fieldStyle string) ([]ProtoMessage, error)
 		FieldStyle: fieldStyle,
 		TypeConfig: DefaultTypeMappingConfig(),
 	}
-	
+
 	var messages []ProtoMessage
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -174,8 +173,10 @@ func ProcessSQLCDirectory(dir string, fieldStyle string) ([]ProtoMessage, error)
 			return err
 		}
 		if !info.IsDir() && strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
-			// Skip query files, only process model files
-			if strings.Contains(path, "query") || strings.Contains(path, "querier") {
+			// Process all Go files except for querier.go and db.go
+			// querier.go contains the interface and db.go contains the DB connection code
+			filename := filepath.Base(path)
+			if filename == "querier.go" || filename == "db.go" {
 				return nil
 			}
 
@@ -191,15 +192,14 @@ func ProcessSQLCDirectory(dir string, fieldStyle string) ([]ProtoMessage, error)
 	return messages, err
 }
 
-
 // GenerateHelperFunctions generates helper functions for type conversions
 func GenerateHelperFunctions(messages []ProtoMessage) string {
 	// This method analyzes which helper functions are needed based on the conversion code
 	// in the messages and generates the corresponding function implementations
-	
+
 	// Track which helper functions we need to generate using a set
 	neededHelpers := make(map[string]bool)
-	
+
 	// Analyze all messages to determine which helpers are needed
 	for _, msg := range messages {
 		for _, field := range msg.Fields {
@@ -208,7 +208,7 @@ func GenerateHelperFunctions(messages []ProtoMessage) string {
 			extractHelperNames(field.ReverseConversionCode, neededHelpers)
 		}
 	}
-	
+
 	// Generate the helper functions that are needed
 	return generateHelperFunctionsCode(neededHelpers)
 }
@@ -252,10 +252,10 @@ func processSQLCFile(filePath string, config ParserConfig) ([]ProtoMessage, erro
 				SQLCStruct: typeSpec.Name.Name,
 				Comments:   extractComments(genDecl.Doc),
 			}
-			
+
 			// Process struct fields
 			message.Fields = processStructFields(structType, message.Name, config)
-			
+
 			messages = append(messages, message)
 		}
 	}
@@ -266,7 +266,7 @@ func processSQLCFile(filePath string, config ParserConfig) ([]ProtoMessage, erro
 // processStructFields extracts and processes the fields of a struct
 func processStructFields(structType *ast.StructType, structName string, config ParserConfig) []ProtoField {
 	var fields []ProtoField
-	
+
 	for i, field := range structType.Fields.List {
 		// Skip embedded fields
 		if len(field.Names) == 0 {
@@ -284,10 +284,10 @@ func processStructFields(structType *ast.StructType, structName string, config P
 			// Skip fields that couldn't be processed
 			continue
 		}
-		
+
 		fields = append(fields, protoField)
 	}
-	
+
 	return fields
 }
 
@@ -299,10 +299,10 @@ func extractProtoField(field *ast.Field, fieldName string, fieldNumber int, conf
 		Comment:  extractComments(field.Doc),
 		SQLCName: fieldName,
 	}
-	
+
 	// Determine the proto field name based on style
 	protoField.Name = getProtoFieldName(field, fieldName, config.FieldStyle)
-	
+
 	// Extract JSON name and tags
 	if field.Tag != nil {
 		tagValue := strings.Trim(field.Tag.Value, "`")
@@ -314,19 +314,19 @@ func extractProtoField(field *ast.Field, fieldName string, fieldNumber int, conf
 			if jsonName != "-" {
 				protoField.JSONName = jsonName
 			}
-			
+
 			// If json tag has omitempty, mark as optional
 			if strings.Contains(jsonTag, "omitempty") {
 				protoField.IsOptional = true
 			}
 		}
 	}
-	
+
 	// Process the field type
 	if !processFieldType(field, &protoField, config.TypeConfig) {
 		return ProtoField{}, false
 	}
-	
+
 	return protoField, true
 }
 
@@ -343,7 +343,7 @@ func getProtoFieldName(field *ast.Field, fieldName string, fieldStyle string) st
 			}
 		}
 	}
-	
+
 	switch fieldStyle {
 	case "json":
 		// Use JSON tag if available, otherwise convert to snake_case
@@ -367,12 +367,12 @@ func getProtoFieldName(field *ast.Field, fieldName string, fieldStyle string) st
 func processFieldType(field *ast.Field, protoField *ProtoField, typeConfig TypeMappingConfig) bool {
 	// Extract type string from the AST
 	typeStr := exprToTypeString(field.Type)
-	
+
 	// Handle array/slice types
 	if strings.HasPrefix(typeStr, "[]") {
 		return processArrayType(typeStr, protoField, typeConfig)
 	}
-	
+
 	// Handle standard types
 	return processStandardType(typeStr, protoField, typeConfig)
 }
@@ -381,19 +381,19 @@ func processFieldType(field *ast.Field, protoField *ProtoField, typeConfig TypeM
 func processArrayType(typeStr string, protoField *ProtoField, typeConfig TypeMappingConfig) bool {
 	// Remove the slice prefix
 	elementType := strings.TrimPrefix(typeStr, "[]")
-	
+
 	// Special case for []byte which maps to bytes
 	if elementType == "byte" {
 		// Reset to full type for lookup
 		typeStr = "[]byte"
 		return processStandardType(typeStr, protoField, typeConfig)
 	}
-	
+
 	// For normal slices, process the element type and mark as repeated
 	if !processStandardType(elementType, protoField, typeConfig) {
 		return false
 	}
-	
+
 	protoField.IsRepeated = true
 	return true
 }
@@ -404,7 +404,7 @@ func processStandardType(typeStr string, protoField *ProtoField, typeConfig Type
 	if protoType, ok := typeConfig.NullableTypes[typeStr]; ok {
 		protoField.Type = protoType
 		protoField.IsOptional = true
-		
+
 		// Set conversion code
 		if converter, ok := typeConfig.CustomConverters[typeStr]; ok {
 			protoField.ConversionCode = fmt.Sprintf(converter.ToProto, "in."+protoField.SQLCName)
@@ -414,14 +414,14 @@ func processStandardType(typeStr string, protoField *ProtoField, typeConfig Type
 			protoField.ConversionCode = fmt.Sprintf("in.%s", protoField.SQLCName)
 			protoField.ReverseConversionCode = fmt.Sprintf("in.%s", pascalCase(protoField.Name))
 		}
-		
+
 		return true
 	}
-	
+
 	// Then check standard types
 	if protoType, ok := typeConfig.StandardTypes[typeStr]; ok {
 		protoField.Type = protoType
-		
+
 		// Set conversion code
 		if converter, ok := typeConfig.CustomConverters[typeStr]; ok {
 			protoField.ConversionCode = fmt.Sprintf(converter.ToProto, "in."+protoField.SQLCName)
@@ -431,15 +431,15 @@ func processStandardType(typeStr string, protoField *ProtoField, typeConfig Type
 			protoField.ConversionCode = fmt.Sprintf("in.%s", protoField.SQLCName)
 			protoField.ReverseConversionCode = fmt.Sprintf("in.%s", pascalCase(protoField.Name))
 		}
-		
+
 		return true
 	}
-	
+
 	// Default to string for unknown types
 	protoField.Type = "string"
 	protoField.ConversionCode = fmt.Sprintf("in.%s", protoField.SQLCName)
 	protoField.ReverseConversionCode = fmt.Sprintf("in.%s", pascalCase(protoField.Name))
-	
+
 	return true
 }
 
@@ -513,7 +513,7 @@ func pascalCase(s string) string {
 func extractHelperNames(code string, helpers map[string]bool) {
 	// Simple regex-like approach to find function calls
 	// A more robust approach would use proper regex or AST parsing
-	
+
 	// Common prefixes that indicate helper functions
 	helperPrefixes := []string{
 		"nullStringToString", "stringToNullString",
@@ -532,7 +532,7 @@ func extractHelperNames(code string, helpers map[string]bool) {
 		"jsonToString", "stringToJSON",
 		"intervalToInt64", "int64ToInterval",
 	}
-	
+
 	for _, prefix := range helperPrefixes {
 		if strings.Contains(code, prefix) {
 			helpers[prefix] = true
@@ -795,8 +795,19 @@ func int64ToInterval(v int64) pgtype.Interval {
 		Valid:        true,
 	}
 }`,
+		// CommandTag helpers
+		"commandTagToString": `
+// Helper function to convert pgconn.CommandTag to string
+func commandTagToString(v pgconn.CommandTag) string {
+	return v.String()
+}`,
+		"stringToCommandTag": `
+// Helper function to convert string to pgconn.CommandTag
+func stringToCommandTag(v string) pgconn.CommandTag {
+	return pgconn.CommandTag(v)
+}`,
 	}
-	
+
 	// Build the output string with only the needed implementations
 	var implementations []string
 	for helperName, needed := range neededHelpers {
@@ -806,6 +817,6 @@ func int64ToInterval(v int64) pgtype.Interval {
 			}
 		}
 	}
-	
+
 	return strings.Join(implementations, "\n")
 }

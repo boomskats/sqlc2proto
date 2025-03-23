@@ -137,11 +137,21 @@ func GenerateServiceFile(services []parser.ServiceDefinition, config common.Conf
 		ModelsProtoRef string
 		HasTimestamp   bool
 	}{
-		Services:       services,
-		PackageName:    config.ProtoPackageName,
-		GoPackagePath:  config.GoPackagePath,
-		ModelsProtoRef: "models.proto", // Default to models.proto
-		HasTimestamp:   hasTimestamp,
+		Services:      services,
+		PackageName:   config.ProtoPackageName,
+		GoPackagePath: config.GoPackagePath,
+		ModelsProtoRef: func() string {
+			// For buf compatibility, we need to use a path that works with buf's import resolution
+			// Buf typically looks for imports relative to the root of the buf module
+
+			// Use the proto output directory directly, just ensure it's in the correct format
+			// by removing any leading "./" and using forward slashes
+			protoDir := strings.TrimPrefix(config.ProtoOutputDir, "./")
+
+			// Join with models.proto to get the full import path
+			return filepath.Join(protoDir, "models.proto")
+		}(),
+		HasTimestamp: hasTimestamp,
 	}
 
 	// Ensure the parent directory exists

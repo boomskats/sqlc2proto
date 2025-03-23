@@ -8,7 +8,12 @@ import (
     {{ if .HasTimestamp }}
     "time"
     "google.golang.org/protobuf/types/known/timestamppb"
+    {{ end }}
+    {{ if or .HasTimestamp .HasPgType }}
     "github.com/jackc/pgx/v5/pgtype"
+    {{ end }}
+    {{ if .HasPgConn }}
+    "github.com/jackc/pgx/v5/pgconn"
     {{ end }}
     pb "{{ .ProtoImport }}"
     db "{{ .DBImport }}"
