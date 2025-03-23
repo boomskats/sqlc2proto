@@ -1,11 +1,20 @@
 package generator
 
 import (
+	_ "embed"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/boomskats/sqlc2proto/cmd/common"
 	"github.com/boomskats/sqlc2proto/internal/parser"
+	"github.com/iancoleman/strcase"
 )
+
+//go:embed service.tmpl
+var serviceTemplate string
 
 // GenerateServiceFile generates a service.proto file based on the configuration
 func GenerateServiceFile(services []parser.ServiceDefinition, config common.Config, outputPath string) error {
@@ -80,6 +89,76 @@ func GenerateServiceFile(services []parser.ServiceDefinition, config common.Conf
 				}
 			}
 		}
+	}
+
+	// Parse the template
+	tmpl, err := template.New("service").Funcs(template.FuncMap{
+		"camelCase":  strcase.ToLowerCamel,
+		"pascalCase": strcase.ToCamel,
+		"snakeCase":  strcase.ToSnake,
+	}).Parse(serviceTemplate)
+	if err != nil {
+		return fmt.Errorf("failed to parse service template: %w", err)
+	}
+
+	// Check if any service method uses Timestamp
+	hasTimestamp := false
+	for _, service := range services {
+		for _, method := range service.Methods {
+			for _, field := range method.RequestFields {
+				if field.Type == "google.protobuf.Timestamp" {
+					hasTimestamp = true
+					break
+				}
+			}
+			if hasTimestamp {
+				break
+			}
+			for _, field := range method.ResponseFields {
+				if field.Type == "google.protobuf.Timestamp" {
+					hasTimestamp = true
+					break
+				}
+			}
+			if hasTimestamp {
+				break
+			}
+		}
+		if hasTimestamp {
+			break
+		}
+	}
+
+	// Create template data
+	data := struct {
+		Services       []parser.ServiceDefinition
+		PackageName    string
+		GoPackagePath  string
+		ModelsProtoRef string
+		HasTimestamp   bool
+	}{
+		Services:       services,
+		PackageName:    config.ProtoPackageName,
+		GoPackagePath:  config.GoPackagePath,
+		ModelsProtoRef: "models.proto", // Default to models.proto
+		HasTimestamp:   hasTimestamp,
+	}
+
+	// Ensure the parent directory exists
+	if err = os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Create output file
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer f.Close()
+
+	// Execute template
+	if err := tmpl.Execute(f, data); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
 	}
 
 	return nil
