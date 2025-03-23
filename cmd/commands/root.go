@@ -52,6 +52,8 @@ Go code for converting between sqlc models and protobuf messages.
 
 Example:
 	 sqlc2proto generate --sqlc-dir=./db/sqlc --proto-dir=./proto --package=api.v1 --with-mappers
+
+Or better, run sqlc2proto init at the root of your go project to get a sqlc2proto.yaml, and go from there.
 `,
 		Version: Version,
 		Run: func(cmd *cobra.Command, args []string) {
