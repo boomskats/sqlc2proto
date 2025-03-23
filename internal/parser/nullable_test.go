@@ -8,7 +8,14 @@ import (
 func TestNullableTypes(t *testing.T) {
 	// Test processing the basic_types.go file which contains nullable types
 	filePath := filepath.Join("testdata", "basic_types.go")
-	messages, err := processSQLCFile(filePath, "json")
+
+	config := ParserConfig{
+		FieldStyle: "json",
+		TypeConfig: DefaultTypeMappingConfig(),
+	}
+
+	// Process the file
+	messages, err := processSQLCFile(filePath, config)
 
 	if err != nil {
 		t.Fatalf("processSQLCFile failed: %v", err)
@@ -125,7 +132,14 @@ type AllNullableTypes struct {
 	}
 
 	// Process the file
-	messages, err := processSQLCFile(tempFile, "json")
+
+	config := ParserConfig{
+		FieldStyle: "json",
+		TypeConfig: DefaultTypeMappingConfig(),
+	}
+
+	// Process the file
+	messages, err := processSQLCFile(tempFile, config)
 	if err != nil {
 		t.Fatalf("processSQLCFile failed: %v", err)
 	}

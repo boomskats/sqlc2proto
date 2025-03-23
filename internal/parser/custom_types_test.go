@@ -1,16 +1,15 @@
 package parser
 
 import (
+	"maps"
 	"path/filepath"
 	"testing"
 )
 
 func TestCustomTypeMappings(t *testing.T) {
 	// Save original mappings
-	originalMappings := make(map[string]string)
-	for k, v := range TypeMapping {
-		originalMappings[k] = v
-	}
+	originalStandardMappings := maps.Clone(TypeMapping)
+	originalNullableMappings := maps.Clone(NullableTypeMapping)
 
 	// Create a temporary test file with custom types
 	tempFile := filepath.Join(t.TempDir(), "custom_types.go")
@@ -38,15 +37,26 @@ type CustomTypes struct {
 
 	// Add custom type mappings
 	customMappings := map[string]string{
-		"custom.Type":     "custom.ProtoType",
-		"another.Type":    "another.ProtoType",
+		"custom.Type":  "custom.ProtoType",
+		"another.Type": "another.ProtoType",
+	}
+
+	customNullableMappings := map[string]string{
 		"custom.Nullable": "string",
 	}
 
+	// Add custom mappings to the global variables
 	AddCustomTypeMappings(customMappings)
+	AddCustomNullableTypeMappings(customNullableMappings)
 
-	// Process the file with custom mappings
-	messages, err := processSQLCFile(tempFile, "json")
+	// Get a config that includes the custom mappings we just added
+	config := ParserConfig{
+		FieldStyle: "json",
+		TypeConfig: GetTypeMapConfig(), // This should now include our custom mappings
+	}
+
+	// Process the file with the updated config
+	messages, err := processSQLCFile(tempFile, config)
 	if err != nil {
 		t.Fatalf("processSQLCFile failed: %v", err)
 	}
@@ -100,10 +110,8 @@ type CustomTypes struct {
 	}
 
 	// Restore original mappings for other tests
-	TypeMapping = make(map[string]string)
-	for k, v := range originalMappings {
-		TypeMapping[k] = v
-	}
+	TypeMapping = originalStandardMappings
+	NullableTypeMapping = originalNullableMappings
 }
 
 func TestTypeMapping(t *testing.T) {
@@ -142,8 +150,13 @@ type AllStandardTypes struct {
 		return
 	}
 
+	config := ParserConfig{
+		FieldStyle: "json",
+		TypeConfig: DefaultTypeMappingConfig(),
+	}
+
 	// Process the file
-	messages, err := processSQLCFile(tempFile, "json")
+	messages, err := processSQLCFile(tempFile, config)
 	if err != nil {
 		t.Fatalf("processSQLCFile failed: %v", err)
 	}

@@ -9,7 +9,6 @@ import (
 
 // GenerateServiceFile generates a service.proto file based on the configuration
 func GenerateServiceFile(services []parser.ServiceDefinition, config common.Config, outputPath string) error {
-	// Implementation from earlier service-generator.go
 
 	// Apply service naming configuration
 	for i := range services {

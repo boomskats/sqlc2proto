@@ -8,7 +8,13 @@ import (
 func TestPointerTypes(t *testing.T) {
 	// Test processing the complex_types.go file which contains pointer types
 	filePath := filepath.Join("testdata", "complex_types.go")
-	messages, err := processSQLCFile(filePath, "json")
+
+	config := ParserConfig{
+		FieldStyle: "json",
+		TypeConfig: DefaultTypeMappingConfig(),
+	}
+
+	messages, err := processSQLCFile(filePath, config)
 
 	if err != nil {
 		t.Fatalf("processSQLCFile failed: %v", err)

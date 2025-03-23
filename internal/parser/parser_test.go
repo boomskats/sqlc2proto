@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,7 +10,14 @@ import (
 func TestProcessSQLCFile_BasicTypes(t *testing.T) {
 	// Test processing the basic_types.go file
 	filePath := filepath.Join("testdata", "basic_types.go")
-	messages, err := processSQLCFile(filePath, "json")
+
+	config := ParserConfig{
+		FieldStyle: "json",
+		TypeConfig: DefaultTypeMappingConfig(),
+	}
+
+	// Process the file
+	messages, err := processSQLCFile(filePath, config)
 
 	if err != nil {
 		t.Fatalf("processSQLCFile failed: %v", err)
@@ -109,8 +117,14 @@ func TestProcessSQLCFile_BasicTypes(t *testing.T) {
 func TestProcessSQLCFile_ComplexTypes(t *testing.T) {
 	// Test processing the complex_types.go file
 	filePath := filepath.Join("testdata", "complex_types.go")
-	messages, err := processSQLCFile(filePath, "json")
 
+	config := ParserConfig{
+		FieldStyle: "json",
+		TypeConfig: DefaultTypeMappingConfig(),
+	}
+
+    // Process the file
+	messages, err := processSQLCFile(filePath, config)
 	if err != nil {
 		t.Fatalf("processSQLCFile failed: %v", err)
 	}
@@ -548,13 +562,20 @@ func TestGenerateHelperFunctions(t *testing.T) {
 	}
 }
 
-func TestGenerateConversionCode(t *testing.T) {
-	// Test generateNullableConversionCode
-	nullableField := ProtoField{
+func TestTypeConversion(t *testing.T) {
+	// Create test field
+	field := ProtoField{
 		Name:     "test_field",
 		SQLCName: "TestField",
 	}
 
+	// Create a test config with our mappings
+	config := ParserConfig{
+		FieldStyle: "snake_case",
+		TypeConfig: GetTypeMapConfig(),
+	}
+
+	// Test nullable type conversions
 	nullableTests := []struct {
 		sqlType  string
 		expected string
@@ -571,18 +592,19 @@ func TestGenerateConversionCode(t *testing.T) {
 	}
 
 	for _, tt := range nullableTests {
-		result := generateNullableConversionCode(tt.sqlType, nullableField)
-		if result != tt.expected {
-			t.Errorf("generateNullableConversionCode(%q, field) = %q, want %q", tt.sqlType, result, tt.expected)
+		// Create a copy of the field for this test
+		testField := field
+		
+		// Process the field using our new implementation
+		processStandardType(tt.sqlType, &testField, config.TypeConfig)
+		
+		// Check the result
+		if testField.ConversionCode != tt.expected {
+			t.Errorf("Conversion for %q = %q, want %q", tt.sqlType, testField.ConversionCode, tt.expected)
 		}
 	}
 
-	// Test generateStandardConversionCode
-	standardField := ProtoField{
-		Name:     "test_field",
-		SQLCName: "TestField",
-	}
-
+	// Test standard type conversions
 	standardTests := []struct {
 		sqlType  string
 		expected string
@@ -600,9 +622,59 @@ func TestGenerateConversionCode(t *testing.T) {
 	}
 
 	for _, tt := range standardTests {
-		result := generateStandardConversionCode(tt.sqlType, standardField)
-		if result != tt.expected {
-			t.Errorf("generateStandardConversionCode(%q, field) = %q, want %q", tt.sqlType, result, tt.expected)
+		// Create a copy of the field for this test
+		testField := field
+		
+		// Process the field using our new implementation
+		processStandardType(tt.sqlType, &testField, config.TypeConfig)
+		
+		// Check the result
+		if testField.ConversionCode != tt.expected {
+			t.Errorf("Conversion for %q = %q, want %q", tt.sqlType, testField.ConversionCode, tt.expected)
 		}
 	}
 }
+
+// Helper function to manually generate conversion code for testing unknown types
+func TestGenerateConversionCode(t *testing.T) {
+	// This test verifies that we can generate proper conversion code using the ConversionMapping
+	
+	// Directly test the conversion mapping approach
+	mapping := GetTypeMapConfig()
+	
+	tests := []struct {
+		goType   string
+		fieldName string
+		expected string
+	}{
+		{"sql.NullString", "TestField", "nullStringToString(in.TestField)"},
+		{"time.Time", "CreatedAt", "timestamppb.New(in.CreatedAt)"},
+		{"unknown.Type", "Data", "in.Data"},
+	}
+	
+	for _, tt := range tests {
+		var result string
+		
+		// Check if we have a custom converter
+		if converter, ok := mapping.CustomConverters[tt.goType]; ok {
+			result = formatConversionCode(converter.ToProto, "in."+tt.fieldName)
+		} else {
+			// Default handling for unknown types
+			result = "in." + tt.fieldName
+		}
+		
+		if result != tt.expected {
+			t.Errorf("Conversion for %q with field %q = %q, want %q", 
+				tt.goType, tt.fieldName, result, tt.expected)
+		}
+	}
+}
+
+// Helper for the test
+func formatConversionCode(template, fieldRef string) string {
+	if template == "" {
+		return fieldRef
+	}
+	return fmt.Sprintf(template, fieldRef)
+}
+
